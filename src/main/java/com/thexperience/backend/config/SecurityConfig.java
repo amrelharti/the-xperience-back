@@ -28,6 +28,7 @@ public class SecurityConfig {
             )
             .cors(Customizer.withDefaults());
         // TODO: add JWT auth filter before UsernamePasswordAuthenticationFilter
+                http.addFilterBefore(new com.thexperience.backend.security.JwtAuthFilter(new com.thexperience.backend.security.JwtService("${app.jwt-secret}")), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

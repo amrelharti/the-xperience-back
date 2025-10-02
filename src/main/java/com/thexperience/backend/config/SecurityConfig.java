@@ -14,7 +14,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 @Configuration
-public class SecurityConfig {
+public class SecurityConfig {\n\n    private final com.thexperience.backend.security.JwtAuthFilter jwtAuthFilter;\n\n    public SecurityConfig(com.thexperience.backend.security.JwtAuthFilter jwtAuthFilter) {\n        this.jwtAuthFilter = jwtAuthFilter;\n    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -29,6 +29,7 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults());
         // TODO: add JWT auth filter before UsernamePasswordAuthenticationFilter
                 http.addFilterBefore(new com.thexperience.backend.security.JwtAuthFilter(new com.thexperience.backend.security.JwtService("${app.jwt-secret}")), org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
+                http.addFilterBefore(jwtAuthFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

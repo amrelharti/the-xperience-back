@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,14 +45,18 @@ public class AccessCodeController {
     }
 
     @GetMapping("/api/admin/modules/{moduleId}/codes")
-    public List<Map<String,Object>> list(@PathVariable UUID moduleId) {
+    public List<Map<String, Object>> list(@PathVariable UUID moduleId) {
         ModuleEntity module = modules.findById(moduleId).orElseThrow();
-        return codes.findByModule(module).stream().map(c -> Map.of(
-                "id", c.getId(),
-                "used", c.getConsumedAt() != null,
-                "createdAt", c.getCreatedAt(),
-                "consumedAt", c.getConsumedAt()
-        )).toList();
+        return codes.findByModule(module).stream()
+                .map(c -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", c.getId());
+                    m.put("used", c.getConsumedAt() != null);
+                    m.put("createdAt", c.getCreatedAt());
+                    m.put("consumedAt", c.getConsumedAt());
+                    return m;
+                })
+                .toList();
     }
 
     @DeleteMapping("/api/admin/codes/{codeId}")

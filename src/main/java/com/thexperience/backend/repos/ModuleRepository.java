@@ -9,4 +9,5 @@ import java.util.UUID;
 
 public interface ModuleRepository extends JpaRepository<ModuleEntity, UUID> {
     List<ModuleEntity> findByCourse(CourseEntity course);
+    List<ModuleEntity> findByCourseId(UUID courseId);
 }

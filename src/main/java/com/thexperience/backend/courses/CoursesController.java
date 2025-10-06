@@ -50,6 +50,15 @@ public class CoursesController {
         UUID userId = UUID.fromString(auth.getName());
         UserEntity user = users.findById(userId).orElseThrow();
         CourseEntity c = courses.findById(courseId).orElseThrow();
+        
+        // Automatically enroll user if not already enrolled
+        enrollments.findByUserAndCourse(user, c).orElseGet(() -> {
+            EnrollmentEntity e = new EnrollmentEntity();
+            e.setUser(user); 
+            e.setCourse(c); 
+            return enrollments.save(e);
+        });
+        
         List<ModuleEntity> mods = modules.findByCourse(c);
         List<Map<String,Object>> modDtos = new ArrayList<>();
         for (ModuleEntity m : mods) {
@@ -81,6 +90,18 @@ public class CoursesController {
             e.setUser(user); e.setCourse(c); return enrollments.save(e);
         });
         return ResponseEntity.ok(Map.of("enrolled", true));
+    }
+
+    @GetMapping("/modules/{moduleId}/progress")
+    public ResponseEntity<?> getProgress(@PathVariable UUID moduleId, Authentication auth) {
+        UUID userId = UUID.fromString(auth.getName());
+        UserEntity user = users.findById(userId).orElseThrow();
+        ModuleEntity m = modules.findById(moduleId).orElseThrow();
+        ModuleProgressEntity mp = progressRepo.findByUserAndModule(user, m).orElse(null);
+        if (mp == null) {
+            return ResponseEntity.ok(Map.of("status", "LOCKED"));
+        }
+        return ResponseEntity.ok(Map.of("status", mp.getStatus()));
     }
 
     @PostMapping("/modules/{moduleId}/complete")

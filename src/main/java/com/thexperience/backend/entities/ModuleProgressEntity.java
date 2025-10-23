@@ -27,6 +27,12 @@ public class ModuleProgressEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "courses_done")
+    private Integer coursesDone = 0;
+
+    @Column(name = "sessions_done")
+    private Integer sessionsDone = 0;
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public UserEntity getUser() { return user; }
@@ -39,4 +45,10 @@ public class ModuleProgressEntity {
     public void setStartedAt(Instant startedAt) { this.startedAt = startedAt; }
     public Instant getCompletedAt() { return completedAt; }
     public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
+
+    public Integer getCoursesDone() { return coursesDone; }
+    public void setCoursesDone(Integer coursesDone) { this.coursesDone = coursesDone; }
+
+    public Integer getSessionsDone() { return sessionsDone; }
+    public void setSessionsDone(Integer sessionsDone) { this.sessionsDone = sessionsDone; }
 }

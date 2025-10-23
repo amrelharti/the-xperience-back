@@ -23,7 +23,7 @@ public class PublicController {
     }
     
     // Public DTOs
-    public record CourseResponse(
+    public record ModuleResponse(
         UUID id,
         String title,
         String description,
@@ -33,9 +33,9 @@ public class PublicController {
         String updatedAt
     ) {}
     
-    public record ModuleResponse(
+    public record CourseResponse(
         UUID id,
-        UUID courseId,
+        UUID moduleId,
         String title,
         String description,
         String videoUrl,
@@ -45,65 +45,68 @@ public class PublicController {
         String updatedAt
     ) {}
     
-    // Public Course Endpoints
+    // Public Module Endpoints (Modules are now the top level)
     
     @GetMapping("/courses")
-    public List<CourseResponse> listCourses() {
-        return courses.findByIsPublishedTrue().stream()
-            .map(this::toCourseResponse)
+    public List<ModuleResponse> listModules() {
+        return modules.findAll().stream()
+            .map(this::toModuleResponse)
             .toList();
     }
     
     @GetMapping("/courses/{id}")
-    public ResponseEntity<CourseResponse> getCourse(@PathVariable UUID id) {
-        return courses.findById(id)
-            .filter(CourseEntity::isPublished)
-            .map(this::toCourseResponse)
+    public ResponseEntity<ModuleResponse> getModule(@PathVariable UUID id) {
+        return modules.findById(id)
+            .filter(ModuleEntity::isPublished)
+            .map(this::toModuleResponse)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
     }
     
-    @GetMapping("/courses/{courseId}/modules")
-    public List<ModuleResponse> listModules(@PathVariable UUID courseId) {
-        return modules.findByCourseId(courseId).stream()
-            .map(this::toModuleResponse)
+    @GetMapping("/courses/{moduleId}/modules")
+    public List<CourseResponse> listCourses(@PathVariable UUID moduleId) {
+        return modules.findById(moduleId)
+            .map(module -> courses.findByModuleOrderByOrderIndexAsc(module))
+            .orElse(List.of())
+            .stream()
+            .map(this::toCourseResponse)
             .toList();
     }
     
-    @GetMapping("/courses/{courseId}/modules/{moduleId}")
-    public ResponseEntity<ModuleResponse> getModule(@PathVariable UUID courseId, @PathVariable UUID moduleId) {
-        return modules.findById(moduleId)
-            .filter(module -> module.getCourse().getId().equals(courseId))
-            .map(this::toModuleResponse)
+    @GetMapping("/courses/{moduleId}/modules/{courseId}")
+    public ResponseEntity<CourseResponse> getCourse(@PathVariable UUID moduleId, @PathVariable UUID courseId) {
+        return courses.findById(courseId)
+            .filter(course -> course.getModule().getId().equals(moduleId))
+            .map(this::toCourseResponse)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.notFound().build());
     }
     
     // Helper methods
     
-    private CourseResponse toCourseResponse(CourseEntity course) {
-        return new CourseResponse(
-            course.getId(),
-            course.getTitle(),
-            course.getDescription(),
-            course.getThumbnailUrl(),
-            course.isPublished(),
-            course.getCreatedAt().toString(),
-            course.getUpdatedAt().toString()
-        );
-    }
-    
     private ModuleResponse toModuleResponse(ModuleEntity module) {
         return new ModuleResponse(
             module.getId(),
-            module.getCourse().getId(),
             module.getTitle(),
             module.getDescription(),
-            module.getVideoUrl(),
-            module.getDurationSeconds(),
-            module.getOrderIndex(),
+            module.getThumbnailUrl(),
+            module.isPublished(),
             module.getCreatedAt().toString(),
             module.getUpdatedAt().toString()
+        );
+    }
+    
+    private CourseResponse toCourseResponse(CourseEntity course) {
+        return new CourseResponse(
+            course.getId(),
+            course.getModule().getId(),
+            course.getTitle(),
+            course.getDescription(),
+            course.getVideoUrl(),
+            course.getDurationSeconds(),
+            course.getOrderIndex(),
+            course.getCreatedAt().toString(),
+            course.getUpdatedAt().toString()
         );
     }
 }

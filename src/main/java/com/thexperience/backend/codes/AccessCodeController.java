@@ -51,9 +51,16 @@ public class AccessCodeController {
                 .map(c -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", c.getId());
-                    m.put("used", c.getConsumedAt() != null);
+                    m.put("isUsed", c.getConsumedAt() != null);
+                    m.put("code", "••••••••"); // Hashed, can't display
                     m.put("createdAt", c.getCreatedAt());
                     m.put("consumedAt", c.getConsumedAt());
+                    if (c.getConsumedBy() != null) {
+                        Map<String, Object> user = new LinkedHashMap<>();
+                        user.put("name", c.getConsumedBy().getName());
+                        user.put("email", c.getConsumedBy().getEmail());
+                        m.put("usedBy", user);
+                    }
                     return m;
                 })
                 .toList();

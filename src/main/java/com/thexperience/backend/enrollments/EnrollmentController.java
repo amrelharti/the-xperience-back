@@ -56,7 +56,8 @@ public class EnrollmentController {
             List<Map<String, Object>> courses = enrollments.stream()
                 .map(enrollment -> {
                     CourseEntity course = enrollment.getCourse();
-                    List<ModuleEntity> modules = moduleRepository.findByCourse(course);
+                    // TODO: Fix after restructuring to class-based enrollment
+                    List<ModuleEntity> modules = List.of(); // Temporary fix
                     long startedModules = modules.stream()
                         .filter(module -> moduleProgressRepository.findByUserAndModule(user, module)
                             .map(progress -> "IN_PROGRESS".equals(progress.getStatus()) || "COMPLETED".equals(progress.getStatus()))
@@ -74,8 +75,8 @@ public class EnrollmentController {
                         "id", course.getId().toString(),
                         "title", course.getTitle(),
                         "description", course.getDescription(),
-                        "thumbnailUrl", course.getThumbnailUrl() != null ? course.getThumbnailUrl() : "",
-                        "isPublished", course.isPublished(),
+                        "thumbnailUrl", "", // TODO: Fix after restructuring to class-based enrollment
+                        "isPublished", true, // TODO: Fix after restructuring to class-based enrollment
                         "progress", Map.of(
                             "startedModules", (int) startedModules,
                             "completedModules", (int) completedModules,

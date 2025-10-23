@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 
@@ -16,6 +17,11 @@ public class ProfileController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @GetMapping("/test")
+    public ResponseEntity<?> testProfile() {
+        return ResponseEntity.ok(Map.of("message", "Profile controller is working"));
+    }
 
     @GetMapping
     public ResponseEntity<?> getProfile(Authentication authentication) {
@@ -72,6 +78,12 @@ public class ProfileController {
                 }
             }
             
+            // Update image URL if provided
+            if (profileData.containsKey("imageUrl")) {
+                user.setImageUrl(profileData.get("imageUrl"));
+            }
+            
+            user.setUpdatedAt(Instant.now());
             userRepository.save(user);
             
             return ResponseEntity.ok(Map.of(

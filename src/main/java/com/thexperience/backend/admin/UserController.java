@@ -57,6 +57,19 @@ public class UserController {
         return Map.of("message", "User deleted successfully");
     }
 
+    @PostMapping
+    public UserEntity createUser(@RequestBody CreateUserRequest request) {
+        UserEntity user = new UserEntity();
+        user.setName(request.name());
+        user.setEmail(request.email());
+        user.setRole(request.role());
+        user.setImageUrl(request.imageUrl());
+        user.setCreatedAt(java.time.Instant.now());
+        user.setUpdatedAt(java.time.Instant.now());
+        
+        return userRepository.save(user);
+    }
+
     @GetMapping("/stats")
     public Map<String, Object> getUserStats() {
         long totalUsers = userRepository.count();
@@ -69,6 +82,13 @@ public class UserController {
             "studentUsers", studentUsers
         );
     }
+
+    public record CreateUserRequest(
+        String name,
+        String email,
+        String role,
+        String imageUrl
+    ) {}
 
     public record UpdateUserRequest(
         String name,

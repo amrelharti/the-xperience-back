@@ -30,8 +30,13 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth
-                            .requestMatchers("/api/health", "/api/auth/google", "/api/auth/email", "/api/auth/logout").permitAll()
+                            .requestMatchers("/api/health", "/api/auth/google", "/api/auth/email", "/api/auth/logout", "/api/test/**", "/api/feed/fix-post-classes", "/api/feed/debug-posts").permitAll()
                             .requestMatchers("/api/public/**").permitAll()
+                            .requestMatchers("/api/me").authenticated()
+                            .requestMatchers("/api/profile/**").authenticated()
+                            .requestMatchers("/api/classes/my-classes").authenticated()
+                            .requestMatchers("/api/classes/**").permitAll()
+                            .requestMatchers("/api/courses/**").authenticated()
                             .requestMatchers("/api/admin/**").hasRole("ADMIN")
                             .anyRequest().authenticated()
                     )
@@ -47,7 +52,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
+        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
         config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
 

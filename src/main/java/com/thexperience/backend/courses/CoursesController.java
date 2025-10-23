@@ -14,82 +14,96 @@ import java.util.stream.Collectors;
 public class CoursesController {
     private final CourseRepository courses;
     private final ModuleRepository modules;
+    private final TrainingModuleRepository trainingModules;
     private final EnrollmentRepository enrollments;
     private final ModuleProgressRepository progressRepo;
+    private final ModuleAccessCodeRepository accessCodes;
     private final UserRepository users;
 
-    public CoursesController(CourseRepository courses, ModuleRepository modules, EnrollmentRepository enrollments,
-                             ModuleProgressRepository progressRepo, UserRepository users) {
-        this.courses = courses; this.modules = modules; this.enrollments = enrollments; this.progressRepo = progressRepo; this.users = users;
+    public CoursesController(CourseRepository courses, ModuleRepository modules, TrainingModuleRepository trainingModules,
+                             EnrollmentRepository enrollments, ModuleProgressRepository progressRepo,
+                             ModuleAccessCodeRepository accessCodes, UserRepository users) {
+        this.courses = courses;
+        this.modules = modules;
+        this.trainingModules = trainingModules;
+        this.enrollments = enrollments;
+        this.progressRepo = progressRepo;
+        this.accessCodes = accessCodes;
+        this.users = users;
     }
 
     @GetMapping("/courses")
     public List<Map<String,Object>> list(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
-        UserEntity user = users.findById(userId).orElseThrow();
-        return courses.findAll().stream().map(c -> {
-            List<ModuleEntity> mods = modules.findByCourse(c);
-            long completed = mods.stream().filter(m -> progressRepo.findByUserAndModule(user, m).map(p -> "COMPLETED".equals(p.getStatus())).orElse(false)).count();
+        UserEntity user = users.findById(userId).orElse(null);
+        if (user == null) {
+            // Return empty list if user not found
+            return List.of();
+        }
+        return modules.findAll().stream().map(m -> {
+            List<CourseEntity> courseList = courses.findByModule(m);
+            long completed = courseList.stream().filter(c -> progressRepo.findByUserAndModule(user, m).map(p -> "COMPLETED".equals(p.getStatus())).orElse(false)).count();
             Map<String,Object> map = new HashMap<>();
-            map.put("id", c.getId());
-            map.put("title", c.getTitle());
-            map.put("description", c.getDescription());
-            map.put("thumbnailUrl", c.getThumbnailUrl());
-            map.put("isPublished", c.isPublished());
+            map.put("id", m.getId());
+            map.put("title", m.getTitle());
+            map.put("description", m.getDescription());
+            map.put("thumbnailUrl", m.getThumbnailUrl());
+            map.put("isPublished", m.isPublished());
             Map<String,Object> prog = new HashMap<>();
             prog.put("completedModules", completed);
-            prog.put("totalModules", mods.size());
-            prog.put("percent", mods.size() == 0 ? 0 : Math.round((completed * 100.0) / mods.size()));
+            prog.put("totalModules", courseList.size());
+            prog.put("percent", courseList.size() == 0 ? 0 : Math.round((completed * 100.0) / courseList.size()));
             map.put("progress", prog);
             return map;
         }).collect(Collectors.toList());
     }
 
-    @GetMapping("/courses/{courseId}")
-    public Map<String,Object> detail(@PathVariable UUID courseId, Authentication auth) {
+    @GetMapping("/courses/{trainingId}")
+    public Map<String,Object> detail(@PathVariable UUID trainingId, Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
         UserEntity user = users.findById(userId).orElseThrow();
-        CourseEntity c = courses.findById(courseId).orElseThrow();
+        ModuleEntity training = modules.findById(trainingId).orElseThrow();
         
-        // Automatically enroll user if not already enrolled
-        enrollments.findByUserAndCourse(user, c).orElseGet(() -> {
-            EnrollmentEntity e = new EnrollmentEntity();
-            e.setUser(user); 
-            e.setCourse(c); 
-            return enrollments.save(e);
-        });
+        // Get training modules for this training
+        List<TrainingModuleEntity> modulesList = trainingModules.findByTrainingOrderByOrderIndexAsc(training);
         
-        List<ModuleEntity> mods = modules.findByCourse(c);
-        List<Map<String,Object>> modDtos = new ArrayList<>();
-        for (ModuleEntity m : mods) {
-            String status = progressRepo.findByUserAndModule(user, m).map(ModuleProgressEntity::getStatus).orElse("LOCKED");
-            Map<String,Object> mm = new HashMap<>();
-            mm.put("id", m.getId());
-            mm.put("title", m.getTitle());
-            mm.put("durationSeconds", m.getDurationSeconds());
-            mm.put("orderIndex", m.getOrderIndex());
-            mm.put("status", status);
-            modDtos.add(mm);
+        List<Map<String,Object>> moduleDtos = new ArrayList<>();
+        for (TrainingModuleEntity module : modulesList) {
+            Map<String,Object> moduleDto = new HashMap<>();
+            moduleDto.put("id", module.getId());
+            moduleDto.put("title", module.getTitle());
+            moduleDto.put("description", module.getDescription());
+            moduleDto.put("orderIndex", module.getOrderIndex());
+            moduleDto.put("isActive", module.getIsActive());
+            
+            // Check if user has unlocked this module (consumed an access code)
+            boolean hasAccess = accessCodes.findByModule(training).stream()
+                    .anyMatch(code -> code.getConsumedBy() != null && 
+                                      code.getConsumedBy().getId().equals(userId));
+            moduleDto.put("hasAccess", hasAccess);
+            moduleDto.put("status", hasAccess ? "UNLOCKED" : "LOCKED");
+            
+            // Get courses count for this module
+            List<CourseEntity> moduleCourses = courses.findByTrainingModule(module);
+            moduleDto.put("coursesCount", moduleCourses.size());
+            
+            moduleDtos.add(moduleDto);
         }
+        
         Map<String,Object> out = new HashMap<>();
-        out.put("id", c.getId());
-        out.put("title", c.getTitle());
-        out.put("description", c.getDescription());
-        out.put("thumbnailUrl", c.getThumbnailUrl());
-        out.put("modules", modDtos);
+        out.put("id", training.getId());
+        out.put("title", training.getTitle());
+        out.put("description", training.getDescription());
+        out.put("thumbnailUrl", training.getThumbnailUrl());
+        out.put("modules", moduleDtos);
         return out;
     }
 
-    @PostMapping("/courses/{courseId}/enroll")
-    public ResponseEntity<?> enroll(@PathVariable UUID courseId, Authentication auth) {
-        UUID userId = UUID.fromString(auth.getName());
-        UserEntity user = users.findById(userId).orElseThrow();
-        CourseEntity c = courses.findById(courseId).orElseThrow();
-        enrollments.findByUserAndCourse(user, c).orElseGet(() -> {
-            EnrollmentEntity e = new EnrollmentEntity();
-            e.setUser(user); e.setCourse(c); return enrollments.save(e);
-        });
-        return ResponseEntity.ok(Map.of("enrolled", true));
+    @PostMapping("/courses/{moduleId}/enroll")
+    public ResponseEntity<?> enroll(@PathVariable UUID moduleId, Authentication auth) {
+        // This endpoint is now handled by the ClassController for class enrollment
+        // Students enroll in classes, not directly in modules
+        return ResponseEntity.badRequest().body("Please enroll in a class for this module");
     }
 
     @GetMapping("/modules/{moduleId}/progress")

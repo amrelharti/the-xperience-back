@@ -16,11 +16,11 @@ public class UserEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "image_url")
+    @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
     @Column(nullable = false)
-    private String role; // STUDENT | ADMIN
+    private String role; // STUDENT | PROFESSOR | ADMIN
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();

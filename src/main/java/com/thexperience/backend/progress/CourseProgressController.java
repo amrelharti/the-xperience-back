@@ -29,24 +29,28 @@ public class CourseProgressController {
     @Autowired
     private com.thexperience.backend.services.ProgressService progressService;
 
+    @Autowired
+    private ClassRepository classRepository;
+
     /**
      * Mark a course as completed
      */
     @PostMapping("/courses/{courseId}/complete")
-    public ResponseEntity<?> markCourseAsCompleted(@PathVariable UUID courseId, Authentication auth) {
+    public ResponseEntity<?> markCourseAsCompleted(@PathVariable UUID courseId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             CourseEntity course = courseRepository.findById(courseId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
             // Find or create course progress
-            Optional<CourseProgressEntity> existingProgress = courseProgressRepository.findByUserAndCourse(user, course);
+            Optional<CourseProgressEntity> existingProgress = courseProgressRepository.findByUserAndCourseAndClassEntity(user, course, classEntity);
             
             CourseProgressEntity progress;
             if (existingProgress.isPresent()) {
                 progress = existingProgress.get();
             } else {
-                progress = new CourseProgressEntity(user, course);
+                progress = new CourseProgressEntity(user, course, classEntity);
             }
 
             // Mark as completed
@@ -54,7 +58,7 @@ public class CourseProgressController {
             progress = courseProgressRepository.save(progress);
 
             // Calculate updated module progress
-            int moduleProgress = progressService.calculateModuleProgress(userId, course.getTrainingModule().getId());
+            int moduleProgress = progressService.calculateModuleProgress(userId, course.getTrainingModule().getId(), classId);
 
             return ResponseEntity.ok(Map.of(
                 "courseId", courseId,
@@ -72,20 +76,21 @@ public class CourseProgressController {
      * Mark a course as started (when user begins watching)
      */
     @PostMapping("/courses/{courseId}/start")
-    public ResponseEntity<?> markCourseAsStarted(@PathVariable UUID courseId, Authentication auth) {
+    public ResponseEntity<?> markCourseAsStarted(@PathVariable UUID courseId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             CourseEntity course = courseRepository.findById(courseId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
             // Find or create course progress
-            Optional<CourseProgressEntity> existingProgress = courseProgressRepository.findByUserAndCourse(user, course);
+            Optional<CourseProgressEntity> existingProgress = courseProgressRepository.findByUserAndCourseAndClassEntity(user, course, classEntity);
             
             CourseProgressEntity progress;
             if (existingProgress.isPresent()) {
                 progress = existingProgress.get();
             } else {
-                progress = new CourseProgressEntity(user, course);
+                progress = new CourseProgressEntity(user, course, classEntity);
             }
 
             // Mark as started
@@ -107,20 +112,21 @@ public class CourseProgressController {
      * Update course progress (watch time, completion percentage)
      */
     @PutMapping("/courses/{courseId}/progress")
-    public ResponseEntity<?> updateCourseProgress(@PathVariable UUID courseId, @RequestBody ProgressUpdateRequest request, Authentication auth) {
+    public ResponseEntity<?> updateCourseProgress(@PathVariable UUID courseId, @RequestParam UUID classId, @RequestBody ProgressUpdateRequest request, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             CourseEntity course = courseRepository.findById(courseId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
             // Find or create course progress
-            Optional<CourseProgressEntity> existingProgress = courseProgressRepository.findByUserAndCourse(user, course);
+            Optional<CourseProgressEntity> existingProgress = courseProgressRepository.findByUserAndCourseAndClassEntity(user, course, classEntity);
             
             CourseProgressEntity progress;
             if (existingProgress.isPresent()) {
                 progress = existingProgress.get();
             } else {
-                progress = new CourseProgressEntity(user, course);
+                progress = new CourseProgressEntity(user, course, classEntity);
             }
 
             // Update progress
@@ -136,7 +142,7 @@ public class CourseProgressController {
             progress = courseProgressRepository.save(progress);
 
             // Calculate updated module progress
-            int moduleProgress = progressService.calculateModuleProgress(userId, course.getTrainingModule().getId());
+            int moduleProgress = progressService.calculateModuleProgress(userId, course.getTrainingModule().getId(), classId);
 
             return ResponseEntity.ok(Map.of(
                 "courseId", courseId,
@@ -155,13 +161,14 @@ public class CourseProgressController {
      * Get course progress for a user
      */
     @GetMapping("/courses/{courseId}/progress")
-    public ResponseEntity<?> getCourseProgress(@PathVariable UUID courseId, Authentication auth) {
+    public ResponseEntity<?> getCourseProgress(@PathVariable UUID courseId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             CourseEntity course = courseRepository.findById(courseId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
-            Optional<CourseProgressEntity> progress = courseProgressRepository.findByUserAndCourse(user, course);
+            Optional<CourseProgressEntity> progress = courseProgressRepository.findByUserAndCourseAndClassEntity(user, course, classEntity);
 
             if (progress.isPresent()) {
                 CourseProgressEntity courseProgress = progress.get();
@@ -197,13 +204,14 @@ public class CourseProgressController {
      * Get all course progress for a training module
      */
     @GetMapping("/modules/{moduleId}/courses/progress")
-    public ResponseEntity<?> getModuleCourseProgress(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> getModuleCourseProgress(@PathVariable UUID moduleId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
-            List<CourseProgressEntity> progressList = courseProgressRepository.findByUserAndCourseTrainingModule(user, trainingModule);
+            List<CourseProgressEntity> progressList = courseProgressRepository.findByUserAndCourseTrainingModuleAndClassEntity(user, trainingModule, classEntity);
             List<CourseEntity> allCourses = courseRepository.findByTrainingModuleOrderByOrderIndexAsc(trainingModule);
 
             List<Map<String, Object>> courseProgressList = new ArrayList<>();
@@ -241,7 +249,7 @@ public class CourseProgressController {
             }
 
             // Calculate module progress
-            int moduleProgress = progressService.calculateModuleProgress(userId, moduleId);
+            int moduleProgress = progressService.calculateModuleProgress(userId, moduleId, classId);
 
             return ResponseEntity.ok(Map.of(
                 "moduleId", moduleId,

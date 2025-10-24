@@ -34,11 +34,11 @@ public class ClassController {
     @Autowired
     private UserRepository userRepository;
 
-    // Get all classes
+    // Get all classes (including archived and inactive for admin)
     @GetMapping
     public ResponseEntity<?> getAllClasses() {
         try {
-            List<ClassEntity> classes = classRepository.findByIsArchivedFalseOrderByStartDateDesc();
+            List<ClassEntity> classes = classRepository.findAllByOrderByStartDateDesc();
             List<ClassResponse> responses = classes.stream()
                     .map(this::convertClassToResponse)
                     .collect(Collectors.toList());
@@ -76,7 +76,7 @@ public class ClassController {
 
     // Get all classes for a module
     @GetMapping("/module/{moduleId}")
-    public ResponseEntity<?> getClassesByModule(@PathVariable UUID moduleId) {
+    public ResponseEntity<?> getClassesByModule(@PathVariable UUID moduleId, Authentication auth) {
         try {
             Optional<ModuleEntity> moduleOpt = moduleRepository.findById(moduleId);
             if (moduleOpt.isEmpty()) {
@@ -84,8 +84,22 @@ public class ClassController {
             }
 
             List<ClassEntity> classes = classRepository.findByModuleAndIsActiveTrueAndIsArchivedFalseOrderByStartDateDesc(moduleOpt.get());
+            
+            // Check if user is authenticated
+            final UserEntity finalUser;
+            if (auth != null && auth.getName() != null) {
+                Optional<UserEntity> userOpt = userRepository.findById(UUID.fromString(auth.getName()));
+                if (userOpt.isPresent()) {
+                    finalUser = userOpt.get();
+                } else {
+                    finalUser = null;
+                }
+            } else {
+                finalUser = null;
+            }
+            
             List<ClassResponse> responses = classes.stream()
-                    .map(this::convertClassToResponse)
+                    .map(classEntity -> finalUser != null ? convertClassToResponse(classEntity, finalUser) : convertClassToResponse(classEntity))
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(responses);
@@ -195,13 +209,25 @@ public class ClassController {
                 return ResponseEntity.status(403).body("Only students and admins can view their classes");
             }
 
-            List<ClassEnrollmentEntity> enrollments = classEnrollmentRepository
-                    .findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
+            // Get all enrollments for the user, but filter out inactive classes
+            // Active classes: isActive = true
+            // Archived classes: isActive = false, isArchived = true  
+            // Inactive classes: isActive = false, isArchived = false (excluded)
+            List<ClassEnrollmentEntity> allEnrollments = classEnrollmentRepository
+                    .findByStudentOrderByEnrolledAtDesc(user);
+            
+            List<ClassEnrollmentEntity> enrollments = allEnrollments.stream()
+                    .filter(enrollment -> {
+                        ClassEntity classEntity = enrollment.getClassEntity();
+                        // Include active classes OR archived classes, exclude inactive classes
+                        return classEntity.getIsActive() || classEntity.getIsArchived();
+                    })
+                    .collect(Collectors.toList());
             
             System.out.println("MyClasses - Found " + enrollments.size() + " enrollments for user " + user.getId());
             
             List<ClassResponse> classes = enrollments.stream()
-                    .map(enrollment -> convertClassToResponse(enrollment.getClassEntity()))
+                    .map(enrollment -> convertClassToResponse(enrollment.getClassEntity(), user))
                     .collect(Collectors.toList());
 
             System.out.println("MyClasses - Returning " + classes.size() + " classes");
@@ -401,6 +427,16 @@ public class ClassController {
         // Set status fields
         response.setIsActive(classEntity.getIsActive());
         response.setIsArchived(classEntity.getIsArchived());
+        
+        return response;
+    }
+
+    private ClassResponse convertClassToResponse(ClassEntity classEntity, UserEntity user) {
+        ClassResponse response = convertClassToResponse(classEntity);
+        
+        // Check if user is enrolled in this class
+        boolean isEnrolled = classEnrollmentRepository.findByStudentAndClassEntity(user, classEntity).isPresent();
+        response.setIsEnrolled(isEnrolled);
         
         return response;
     }

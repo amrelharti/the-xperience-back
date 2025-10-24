@@ -37,17 +37,22 @@ public class ProgressService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private ClassRepository classRepository;
+
     /**
-     * Calculate training module progress for a user
+     * Calculate training module progress for a user in a specific class
      * Formula: 50% from live session attendance + 50% from course completion
      *
      * @param userId User ID
      * @param moduleId TrainingModule ID (not Training ID)
+     * @param classId Class ID
      * @return Progress percentage (0-100)
      */
-    public int calculateModuleProgress(UUID userId, UUID moduleId) {
+    public int calculateModuleProgress(UUID userId, UUID moduleId, UUID classId) {
         TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
         UserEntity user = userRepository.findById(userId).orElseThrow();
+        ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
         // 1. Calculate live session progress (50%)
         double liveSessionProgress = 0.0;
@@ -56,7 +61,7 @@ public class ProgressService {
         if (!liveSessions.isEmpty()) {
             int attendedSessions = 0;
             for (LiveSessionEntity session : liveSessions) {
-                if (attendanceRepository.existsBySessionAndUser(session, user)) {
+                if (attendanceRepository.existsBySessionAndUserAndClassEntity(session, user, classEntity)) {
                     attendedSessions++;
                 }
             }
@@ -71,7 +76,7 @@ public class ProgressService {
         List<CourseEntity> courses = courseRepository.findByTrainingModuleOrderByOrderIndexAsc(trainingModule);
         
         if (!courses.isEmpty()) {
-            long completedCourses = courseProgressRepository.countCompletedCoursesByUserAndTrainingModule(user, trainingModule);
+            long completedCourses = courseProgressRepository.countCompletedCoursesByUserAndTrainingModuleAndClassEntity(user, trainingModule, classEntity);
             courseProgress = ((double) completedCourses / courses.size()) * 50.0;
         } else {
             // If no courses exist, course progress is 0%
@@ -92,21 +97,33 @@ public class ProgressService {
      * @return Progress percentage (0-100)
      */
     public int calculateTrainingProgress(UUID userId, UUID classId) {
-        // TODO: Implement training-wide progress
-        // This would calculate average progress across all modules in the class
-        return 0;
+        ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
+        List<TrainingModuleEntity> modules = trainingModuleRepository.findByTrainingOrderByOrderIndexAsc(classEntity.getModule());
+        
+        if (modules.isEmpty()) {
+            return 0;
+        }
+        
+        int totalProgress = 0;
+        for (TrainingModuleEntity module : modules) {
+            totalProgress += calculateModuleProgress(userId, module.getId(), classId);
+        }
+        
+        return totalProgress / modules.size();
     }
 
     /**
-     * Get detailed progress breakdown for a training module
+     * Get detailed progress breakdown for a training module in a specific class
      *
      * @param userId User ID
      * @param moduleId TrainingModule ID
+     * @param classId Class ID
      * @return Progress details map
      */
-    public java.util.Map<String, Object> getModuleProgressDetails(UUID userId, UUID moduleId) {
+    public java.util.Map<String, Object> getModuleProgressDetails(UUID userId, UUID moduleId, UUID classId) {
         TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
         UserEntity user = userRepository.findById(userId).orElseThrow();
+        ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
         java.util.Map<String, Object> details = new java.util.HashMap<>();
 
@@ -114,7 +131,7 @@ public class ProgressService {
         List<LiveSessionEntity> liveSessions = liveSessionRepository.findByTrainingModuleOrderByStartsAtAsc(trainingModule);
         int attendedSessions = 0;
         for (LiveSessionEntity session : liveSessions) {
-            if (attendanceRepository.existsBySessionAndUser(session, user)) {
+            if (attendanceRepository.existsBySessionAndUserAndClassEntity(session, user, classEntity)) {
                 attendedSessions++;
             }
         }
@@ -125,7 +142,7 @@ public class ProgressService {
 
         // Courses
         List<CourseEntity> courses = courseRepository.findByTrainingModuleOrderByOrderIndexAsc(trainingModule);
-        long completedCourses = courseProgressRepository.countCompletedCoursesByUserAndTrainingModule(user, trainingModule);
+        long completedCourses = courseProgressRepository.countCompletedCoursesByUserAndTrainingModuleAndClassEntity(user, trainingModule, classEntity);
         double courseProgress = courses.isEmpty() ? 0.0 : ((double) completedCourses / courses.size()) * 50.0;
         
         details.put("totalCourses", courses.size());
@@ -133,7 +150,7 @@ public class ProgressService {
         details.put("courseProgress", courseProgress);
 
         // Total
-        details.put("totalProgress", calculateModuleProgress(userId, moduleId));
+        details.put("totalProgress", calculateModuleProgress(userId, moduleId, classId));
 
         return details;
     }

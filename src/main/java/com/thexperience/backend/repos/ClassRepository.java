@@ -33,6 +33,9 @@ public interface ClassRepository extends JpaRepository<ClassEntity, UUID> {
     // Find all non-archived classes (both active and inactive)
     List<ClassEntity> findByIsArchivedFalseOrderByStartDateDesc();
     
+    // Find all classes (including archived and inactive) for admin
+    List<ClassEntity> findAllByOrderByStartDateDesc();
+    
     // Find classes by date range
     @Query("SELECT c FROM ClassEntity c WHERE c.startDate <= :date AND (c.endDate IS NULL OR c.endDate >= :date) AND c.isActive = true AND c.isArchived = false")
     List<ClassEntity> findActiveClassesByDate(@Param("date") LocalDate date);

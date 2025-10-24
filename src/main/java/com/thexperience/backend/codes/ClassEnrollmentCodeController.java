@@ -86,6 +86,12 @@ public class ClassEnrollmentCodeController {
         
         UserEntity user = users.findById(UUID.fromString(String.valueOf(auth.getName()))).orElseThrow();
         
+        // Check if user is already enrolled in this class
+        boolean alreadyEnrolled = enrollmentRepository.findByStudentAndClassEntity(user, classEntity).isPresent();
+        if (alreadyEnrolled) {
+            return ResponseEntity.ok(Map.of("enrolled", true, "message", "You are already enrolled in this class"));
+        }
+        
         // Mark code as consumed
         c.setConsumedAt(Instant.now());
         c.setConsumedBy(user);

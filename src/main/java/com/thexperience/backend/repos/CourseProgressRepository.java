@@ -1,5 +1,6 @@
 package com.thexperience.backend.repos;
 
+import com.thexperience.backend.entities.ClassEntity;
 import com.thexperience.backend.entities.CourseEntity;
 import com.thexperience.backend.entities.CourseProgressEntity;
 import com.thexperience.backend.entities.UserEntity;
@@ -15,25 +16,25 @@ import java.util.UUID;
 @Repository
 public interface CourseProgressRepository extends JpaRepository<CourseProgressEntity, UUID> {
     
-    // Find progress by user and course
-    Optional<CourseProgressEntity> findByUserAndCourse(UserEntity user, CourseEntity course);
+    // Find progress by user, course, and class
+    Optional<CourseProgressEntity> findByUserAndCourseAndClassEntity(UserEntity user, CourseEntity course, ClassEntity classEntity);
     
-    // Check if user has completed a specific course
-    boolean existsByUserAndCourseAndStatus(UserEntity user, CourseEntity course, String status);
+    // Check if user has completed a specific course in a specific class
+    boolean existsByUserAndCourseAndClassEntityAndStatus(UserEntity user, CourseEntity course, ClassEntity classEntity, String status);
     
-    // Find all progress for a user
-    List<CourseProgressEntity> findByUserOrderByStartedAtDesc(UserEntity user);
+    // Find all progress for a user in a specific class
+    List<CourseProgressEntity> findByUserAndClassEntityOrderByStartedAtDesc(UserEntity user, ClassEntity classEntity);
     
-    // Find completed courses for a user
-    List<CourseProgressEntity> findByUserAndStatusOrderByCompletedAtDesc(UserEntity user, String status);
+    // Find completed courses for a user in a specific class
+    List<CourseProgressEntity> findByUserAndClassEntityAndStatusOrderByCompletedAtDesc(UserEntity user, ClassEntity classEntity, String status);
     
-    // Find progress for courses in a specific training module
-    @Query("SELECT cp FROM CourseProgressEntity cp WHERE cp.user = :user AND cp.course.trainingModule = :trainingModule ORDER BY cp.course.orderIndex ASC")
-    List<CourseProgressEntity> findByUserAndCourseTrainingModule(@Param("user") UserEntity user, @Param("trainingModule") com.thexperience.backend.entities.TrainingModuleEntity trainingModule);
+    // Find progress for courses in a specific training module and class
+    @Query("SELECT cp FROM CourseProgressEntity cp WHERE cp.user = :user AND cp.course.trainingModule = :trainingModule AND cp.classEntity = :classEntity ORDER BY cp.course.orderIndex ASC")
+    List<CourseProgressEntity> findByUserAndCourseTrainingModuleAndClassEntity(@Param("user") UserEntity user, @Param("trainingModule") com.thexperience.backend.entities.TrainingModuleEntity trainingModule, @Param("classEntity") ClassEntity classEntity);
     
-    // Count completed courses for a user in a specific training module
-    @Query("SELECT COUNT(cp) FROM CourseProgressEntity cp WHERE cp.user = :user AND cp.course.trainingModule = :trainingModule AND cp.status = 'COMPLETED'")
-    long countCompletedCoursesByUserAndTrainingModule(@Param("user") UserEntity user, @Param("trainingModule") com.thexperience.backend.entities.TrainingModuleEntity trainingModule);
+    // Count completed courses for a user in a specific training module and class
+    @Query("SELECT COUNT(cp) FROM CourseProgressEntity cp WHERE cp.user = :user AND cp.course.trainingModule = :trainingModule AND cp.classEntity = :classEntity AND cp.status = 'COMPLETED'")
+    long countCompletedCoursesByUserAndTrainingModuleAndClassEntity(@Param("user") UserEntity user, @Param("trainingModule") com.thexperience.backend.entities.TrainingModuleEntity trainingModule, @Param("classEntity") ClassEntity classEntity);
     
     // Get completion statistics for a course
     @Query("SELECT COUNT(cp) FROM CourseProgressEntity cp WHERE cp.course = :course AND cp.status = 'COMPLETED'")

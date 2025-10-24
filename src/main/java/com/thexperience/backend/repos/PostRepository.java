@@ -84,4 +84,10 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
     
     // Find posts by class ID and post type
     Page<PostEntity> findByClassEntityIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(UUID classId, PostEntity.PostType postType, Pageable pageable);
+    
+    // Find posts by multiple class IDs and module ID
+    Page<PostEntity> findByClassEntityIdInAndModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(List<UUID> classIds, UUID moduleId, Pageable pageable);
+    
+    // Find posts by multiple class IDs, module ID and post type
+    Page<PostEntity> findByClassEntityIdInAndModuleIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(List<UUID> classIds, UUID moduleId, PostEntity.PostType postType, Pageable pageable);
 }

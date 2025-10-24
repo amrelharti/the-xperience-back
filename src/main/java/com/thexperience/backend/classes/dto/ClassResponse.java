@@ -17,6 +17,7 @@ public class ClassResponse {
     private Instant createdAt;
     private Boolean isActive;
     private Boolean isArchived;
+    private Boolean isEnrolled;
 
     // Constructors
     public ClassResponse() {}
@@ -57,6 +58,9 @@ public class ClassResponse {
 
     public Boolean getIsArchived() { return isArchived; }
     public void setIsArchived(Boolean isArchived) { this.isArchived = isArchived; }
+
+    public Boolean getIsEnrolled() { return isEnrolled; }
+    public void setIsEnrolled(Boolean isEnrolled) { this.isEnrolled = isEnrolled; }
 }
 
 

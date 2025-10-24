@@ -73,6 +73,7 @@ public class LeaderboardController {
     public ResponseEntity<?> getClassLeaderboard(
             @PathVariable UUID classId,
             @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) UUID training,
             Authentication auth) {
         try {
             System.out.println("=== CLASS LEADERBOARD REQUEST ===");
@@ -83,7 +84,11 @@ public class LeaderboardController {
             
             System.out.println("Class found: " + classEntity.getName());
             
-            List<Map<String, Object>> leaderboard = calculateClassLeaderboard(classEntity, limit);
+            if (training != null) {
+                System.out.println("Training filter: " + training);
+            }
+            
+            List<Map<String, Object>> leaderboard = calculateClassLeaderboard(classEntity, limit, training);
             
             Map<String, Object> classMap = new HashMap<>();
             classMap.put("id", classEntity.getId().toString());
@@ -233,7 +238,7 @@ public class LeaderboardController {
     }
     
     // Calculate leaderboard for a specific class (NEW: class-based rankings)
-    private List<Map<String, Object>> calculateClassLeaderboard(ClassEntity classEntity, int limit) {
+    private List<Map<String, Object>> calculateClassLeaderboard(ClassEntity classEntity, int limit, UUID trainingId) {
         System.out.println("=== CALCULATING CLASS LEADERBOARD ===");
         System.out.println("Class: " + classEntity.getName() + " (ID: " + classEntity.getId() + ")");
         
@@ -248,7 +253,14 @@ public class LeaderboardController {
             .filter(user -> "STUDENT".equals(user.getRole()))
             .map(user -> {
                 // Calculate points from posts in THIS class only
-                List<PostEntity> classPosts = postRepository.findByAuthorAndClassEntityAndIsAssignmentTrue(user, classEntity);
+                List<PostEntity> classPosts;
+                // For now, use class-only filtering since posts might not have proper module association
+                classPosts = postRepository.findByAuthorAndClassEntityAndIsAssignmentTrue(user, classEntity);
+                System.out.println("User " + user.getName() + " has " + classPosts.size() + " posts in class " + classEntity.getName());
+                
+                if (trainingId != null) {
+                    System.out.println("Note: Training filtering (" + trainingId + ") not yet implemented due to data structure issues");
+                }
                 
                 double totalPoints = classPosts.stream()
                     .filter(post -> post.getAvgScore() != null && post.getScoreCount() != null && post.getScoreCount() > 0)

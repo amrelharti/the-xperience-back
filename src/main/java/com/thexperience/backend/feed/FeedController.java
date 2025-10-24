@@ -52,20 +52,69 @@ public class FeedController {
     @Autowired
     private com.thexperience.backend.repos.ClassRepository classRepository;
 
+    // Debug endpoint to check post module associations
+    @GetMapping("/debug/posts")
+    public ResponseEntity<?> debugPosts(Authentication auth) {
+        try {
+            List<PostEntity> allPosts = postRepository.findAll();
+            List<Map<String, Object>> debugInfo = allPosts.stream()
+                .map(post -> {
+                    Map<String, Object> info = new HashMap<>();
+                    info.put("id", post.getId());
+                    info.put("content", post.getContent().substring(0, Math.min(50, post.getContent().length())));
+                    info.put("moduleId", post.getModule() != null ? post.getModule().getId() : "null");
+                    info.put("classId", post.getClassEntity() != null ? post.getClassEntity().getId() : "null");
+                    info.put("className", post.getClassEntity() != null ? post.getClassEntity().getName() : "null");
+                    info.put("isAssignment", post.getIsAssignment());
+                    return info;
+                })
+                .collect(Collectors.toList());
+            return ResponseEntity.ok(debugInfo);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // Get feed posts - AUTOMATICALLY FILTERED BY USER'S CLASS
     @GetMapping
     public ResponseEntity<?> getFeed(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) UUID moduleId,
-            @RequestParam(required = false) UUID classId,
+            @RequestParam(required = false) String moduleId,
+            @RequestParam(required = false) String classId,
             @RequestParam(required = false) String search,
             Authentication auth) {
         try {
             System.out.println("=== FEED REQUEST (CLASS-FILTERED) ===");
+            System.out.println("Request timestamp: " + java.time.Instant.now());
+            System.out.println("Raw request parameters - moduleId: " + moduleId + ", classId: " + classId + ", type: " + type + ", search: " + search);
+            System.out.println("Parameter types - moduleId: " + (moduleId != null ? moduleId.getClass().getSimpleName() : "null") + 
+                             ", classId: " + (classId != null ? classId.getClass().getSimpleName() : "null"));
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
+            
+            // Convert string parameters to UUIDs
+            UUID moduleIdUuid = null;
+            UUID classIdUuid = null;
+            
+            if (moduleId != null && !moduleId.trim().isEmpty()) {
+                try {
+                    moduleIdUuid = UUID.fromString(moduleId);
+                    System.out.println("Converted moduleId to UUID: " + moduleIdUuid);
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Invalid moduleId format: " + moduleId);
+                }
+            }
+            
+            if (classId != null && !classId.trim().isEmpty()) {
+                try {
+                    classIdUuid = UUID.fromString(classId);
+                    System.out.println("Converted classId to UUID: " + classIdUuid);
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Invalid classId format: " + classId);
+                }
+            }
             
             // Get user's enrolled classes automatically
             List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments = 
@@ -76,6 +125,8 @@ public class FeedController {
                 .collect(Collectors.toList());
             
             System.out.println("User: " + user.getName() + ", Enrolled in " + userClassIds.size() + " classes");
+            System.out.println("User's enrolled class IDs: " + userClassIds);
+            System.out.println("Requested classId: " + classIdUuid);
             
             Pageable pageable = PageRequest.of(page, size);
             Page<PostEntity> posts = Page.empty(pageable); // Initialize with empty page
@@ -88,14 +139,19 @@ public class FeedController {
             } else {
                 // Determine which classes to filter by
                 List<UUID> classesToFilter;
-                if (classId != null) {
+                if (classIdUuid != null) {
                     // User selected a specific class - check if they're enrolled in it
-                    if (userClassIds.contains(classId)) {
-                        classesToFilter = List.of(classId);
-                        System.out.println("Filtering by specific class: " + classId);
+                    System.out.println("Checking if user is enrolled in class: " + classIdUuid);
+                    System.out.println("User's enrolled classes: " + userClassIds);
+                    boolean isEnrolled = userClassIds.contains(classIdUuid);
+                    System.out.println("Is user enrolled in requested class? " + isEnrolled);
+                    
+                    if (isEnrolled) {
+                        classesToFilter = List.of(classIdUuid);
+                        System.out.println("✅ Filtering by specific class: " + classIdUuid);
                     } else {
                         // User not enrolled in selected class - return empty
-                        System.out.println("User not enrolled in selected class, returning empty feed");
+                        System.out.println("❌ User not enrolled in selected class, returning empty feed");
                         posts = Page.empty(pageable);
                         classesToFilter = List.of();
                     }
@@ -109,7 +165,16 @@ public class FeedController {
                     if (search != null && !search.trim().isEmpty()) {
                         // Search within selected classes
                         System.out.println("Searching posts in selected classes with query: " + search);
-                        posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                        if (moduleIdUuid != null) {
+                            try {
+                                posts = postRepository.findByClassEntityIdInAndModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, pageable);
+                            } catch (Exception e) {
+                                System.out.println("Error filtering by module in search, falling back to class-only filter: " + e.getMessage());
+                                posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                            }
+                        } else {
+                            posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                        }
                         // Additional content filtering for search
                         List<PostEntity> allPosts = posts.getContent();
                         List<PostEntity> filteredPosts = allPosts.stream()
@@ -121,11 +186,28 @@ public class FeedController {
                         // Filter by type within selected classes
                         PostEntity.PostType postType = PostEntity.PostType.valueOf(type.toUpperCase());
                         System.out.println("Filtering by type: " + postType + " in selected classes");
-                        posts = postRepository.findByClassEntityIdInAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, postType, pageable);
+                        if (moduleIdUuid != null) {
+                            try {
+                                posts = postRepository.findByClassEntityIdInAndModuleIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, postType, pageable);
+                            } catch (Exception e) {
+                                System.out.println("Error filtering by module and type, falling back to class and type filter: " + e.getMessage());
+                                posts = postRepository.findByClassEntityIdInAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, postType, pageable);
+                            }
+                        } else {
+                            posts = postRepository.findByClassEntityIdInAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, postType, pageable);
+                        }
                     } else {
                         // Show all posts from selected classes
                         System.out.println("Loading all posts from selected classes");
+                        // For now, let's use class-only filtering since posts might not have proper module association
+                        System.out.println("Loading all posts from classes: " + classesToFilter);
                         posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                        System.out.println("Found " + posts.getTotalElements() + " posts for classes");
+                        
+                        // TODO: Implement proper module filtering once posts have correct module association
+                        if (moduleIdUuid != null) {
+                            System.out.println("Note: Module filtering (" + moduleIdUuid + ") not yet implemented due to data structure issues");
+                        }
                     }
                 }
             }

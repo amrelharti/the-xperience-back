@@ -31,6 +31,9 @@ public class LiveSessionController {
     @Autowired(required = false)
     private com.thexperience.backend.services.ProgressService progressService;
 
+    @Autowired
+    private ClassRepository classRepository;
+
     // Create live session (PROFESSOR/ADMIN only)
     @PostMapping("/sessions")
     public ResponseEntity<?> createSession(@RequestBody CreateSessionRequest request, Authentication auth) {
@@ -106,24 +109,25 @@ public class LiveSessionController {
         }
     }
 
-    // Mark attendance for a session
+    // Mark attendance for a session (ADMIN/PROFESSOR only - for manual attendance)
     @PostMapping("/sessions/{sessionId}/attend")
-    public ResponseEntity<?> markAttendance(@PathVariable UUID sessionId, Authentication auth) {
+    public ResponseEntity<?> markAttendance(@PathVariable UUID sessionId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             LiveSessionEntity session = liveSessionRepository.findById(sessionId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
-            // Check if user is already marked as attended
-            if (attendanceRepository.existsBySessionAndUser(session, user)) {
+            // Check if user is already marked as attended in this class
+            if (attendanceRepository.existsBySessionAndUserAndClassEntity(session, user, classEntity)) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Already marked as attended"));
             }
 
-            LiveSessionAttendanceEntity attendance = new LiveSessionAttendanceEntity(session, user);
+            LiveSessionAttendanceEntity attendance = new LiveSessionAttendanceEntity(session, user, classEntity);
             attendanceRepository.save(attendance);
 
             // Update training module progress
-            updateModuleProgress(user, session.getTrainingModule());
+            updateModuleProgress(user, session.getTrainingModule(), classEntity);
 
             return ResponseEntity.ok(Map.of(
                 "sessionId", sessionId,
@@ -148,7 +152,12 @@ public class LiveSessionController {
             }
 
             LiveSessionEntity session = liveSessionRepository.findById(sessionId).orElseThrow();
-            List<LiveSessionAttendanceEntity> attendance = attendanceRepository.findBySessionOrderByAttendedAtAsc(session);
+            // Note: This method needs to be updated to handle class context properly
+            // For now, we'll get all attendance records for the session
+            List<LiveSessionAttendanceEntity> attendance = attendanceRepository.findAll().stream()
+                .filter(att -> att.getSession().getId().equals(sessionId))
+                .sorted((a, b) -> a.getAttendedAt().compareTo(b.getAttendedAt()))
+                .collect(Collectors.toList());
             
             List<Map<String, Object>> attendanceList = attendance.stream()
                 .map(att -> Map.of(
@@ -198,12 +207,12 @@ public class LiveSessionController {
 
     // Get module progress (simple percentage)
     @GetMapping("/modules/{moduleId}/training-progress")
-    public ResponseEntity<?> getModuleProgress(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> getModuleProgress(@PathVariable UUID moduleId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             
             if (progressService != null) {
-                int progress = progressService.calculateModuleProgress(userId, moduleId);
+                int progress = progressService.calculateModuleProgress(userId, moduleId, classId);
                 return ResponseEntity.ok(Map.of("progress", progress));
             } else {
                 return ResponseEntity.ok(Map.of("progress", 0));
@@ -215,12 +224,12 @@ public class LiveSessionController {
 
     // Get module progress details
     @GetMapping("/modules/{moduleId}/progress-details")
-    public ResponseEntity<?> getModuleProgressDetails(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> getModuleProgressDetails(@PathVariable UUID moduleId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             
             if (progressService != null) {
-                Map<String, Object> progress = progressService.getModuleProgressDetails(userId, moduleId);
+                Map<String, Object> progress = progressService.getModuleProgressDetails(userId, moduleId, classId);
                 return ResponseEntity.ok(progress);
             } else {
                 return ResponseEntity.ok(Map.of(
@@ -234,24 +243,25 @@ public class LiveSessionController {
     }
     
     // Helper method to update training module progress
-    private void updateModuleProgress(UserEntity user, TrainingModuleEntity trainingModule) {
+    private void updateModuleProgress(UserEntity user, TrainingModuleEntity trainingModule, ClassEntity classEntity) {
         // Progress is calculated dynamically via ProgressService
         // No need to update a separate progress record
         if (progressService != null) {
-            int progress = progressService.calculateModuleProgress(user.getId(), trainingModule.getId());
+            int progress = progressService.calculateModuleProgress(user.getId(), trainingModule.getId(), classEntity.getId());
             System.out.println("Training module progress updated: " + progress + "%");
         }
     }
 
-    // Check if user attended a session
+    // Check if user attended a session (requires classId for class-specific attendance)
     @GetMapping("/sessions/{sessionId}/my-attendance")
-    public ResponseEntity<?> getMyAttendance(@PathVariable UUID sessionId, Authentication auth) {
+    public ResponseEntity<?> getMyAttendance(@PathVariable UUID sessionId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             LiveSessionEntity session = liveSessionRepository.findById(sessionId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
 
-            boolean attended = attendanceRepository.existsBySessionAndUser(session, user);
+            boolean attended = attendanceRepository.existsBySessionAndUserAndClassEntity(session, user, classEntity);
             
             return ResponseEntity.ok(Map.of(
                 "sessionId", sessionId,
@@ -431,10 +441,11 @@ public class LiveSessionController {
 
     // Student: Mark attendance for live session
     @PostMapping("/modules/{moduleId}/live-session/attend")
-    public ResponseEntity<?> markStudentAttendance(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> markStudentAttendance(@PathVariable UUID moduleId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
             
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
             Optional<LiveSessionEntity> liveSessionOpt = liveSessionRepository.findByTrainingModule(trainingModule);
@@ -455,16 +466,16 @@ public class LiveSessionController {
                 ));
             }
             
-            // Check if user is already marked as attended
-            if (attendanceRepository.existsBySessionAndUser(liveSession, user)) {
+            // Check if user is already marked as attended in this class
+            if (attendanceRepository.existsBySessionAndUserAndClassEntity(liveSession, user, classEntity)) {
                 return ResponseEntity.ok(Map.of("attended", true, "message", "Already marked as attended"));
             }
 
-            LiveSessionAttendanceEntity attendance = new LiveSessionAttendanceEntity(liveSession, user);
+            LiveSessionAttendanceEntity attendance = new LiveSessionAttendanceEntity(liveSession, user, classEntity);
             attendanceRepository.save(attendance);
 
             // Update training module progress
-            updateModuleProgress(user, trainingModule);
+            updateModuleProgress(user, trainingModule, classEntity);
 
             return ResponseEntity.ok(Map.of(
                 "attended", true,
@@ -478,10 +489,11 @@ public class LiveSessionController {
 
     // Student: Check attendance status for live session
     @GetMapping("/modules/{moduleId}/live-session/attend")
-    public ResponseEntity<?> checkStudentAttendance(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> checkStudentAttendance(@PathVariable UUID moduleId, @RequestParam UUID classId, Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
             
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
             Optional<LiveSessionEntity> liveSessionOpt = liveSessionRepository.findByTrainingModule(trainingModule);
@@ -491,7 +503,7 @@ public class LiveSessionController {
             }
             
             LiveSessionEntity liveSession = liveSessionOpt.get();
-            boolean attended = attendanceRepository.existsBySessionAndUser(liveSession, user);
+            boolean attended = attendanceRepository.existsBySessionAndUserAndClassEntity(liveSession, user, classEntity);
             
             return ResponseEntity.ok(Map.of("attended", attended));
         } catch (Exception e) {

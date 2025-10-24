@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "course_progress", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "course_id"}))
+@Table(name = "course_progress", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "course_id", "class_id"}))
 public class CourseProgressEntity {
     @Id
     @GeneratedValue
@@ -18,6 +18,10 @@ public class CourseProgressEntity {
     @ManyToOne(optional = false)
     @JoinColumn(name = "course_id")
     private CourseEntity course;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "class_id")
+    private ClassEntity classEntity;
 
     @Column(nullable = false)
     private String status = "NOT_STARTED"; // NOT_STARTED | IN_PROGRESS | COMPLETED
@@ -37,9 +41,10 @@ public class CourseProgressEntity {
     // Constructors
     public CourseProgressEntity() {}
 
-    public CourseProgressEntity(UserEntity user, CourseEntity course) {
+    public CourseProgressEntity(UserEntity user, CourseEntity course, ClassEntity classEntity) {
         this.user = user;
         this.course = course;
+        this.classEntity = classEntity;
         this.status = "NOT_STARTED";
         this.startedAt = Instant.now();
     }
@@ -68,6 +73,9 @@ public class CourseProgressEntity {
 
     public Double getCompletionPercentage() { return completionPercentage; }
     public void setCompletionPercentage(Double completionPercentage) { this.completionPercentage = completionPercentage; }
+
+    public ClassEntity getClassEntity() { return classEntity; }
+    public void setClassEntity(ClassEntity classEntity) { this.classEntity = classEntity; }
 
     // Helper methods
     public boolean isCompleted() {

@@ -20,8 +20,6 @@ public class MeController {
 
     @GetMapping("/me")
     public Object me(Authentication auth) {
-        System.out.println("MeController: Authentication object: " + auth);
-        System.out.println("MeController: Auth name: " + (auth != null ? auth.getName() : "null"));
         if (auth == null || auth.getName() == null) return Map.of("authenticated", false);
         
         try {

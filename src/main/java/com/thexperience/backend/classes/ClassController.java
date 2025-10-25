@@ -194,7 +194,6 @@ public class ClassController {
 
             // Get user ID from authentication (JWT subject)
             String userId = auth.getName();
-            System.out.println("MyClasses - User ID from auth: " + userId);
             
             // Fetch user from database
             Optional<UserEntity> userOpt = userRepository.findById(UUID.fromString(userId));
@@ -203,7 +202,6 @@ public class ClassController {
             }
             
             UserEntity user = userOpt.get();
-            System.out.println("MyClasses - User: " + user.getId() + ", Role: " + user.getRole());
             
             if (!"STUDENT".equals(user.getRole()) && !"ADMIN".equals(user.getRole())) {
                 return ResponseEntity.status(403).body("Only students and admins can view their classes");
@@ -224,17 +222,13 @@ public class ClassController {
                     })
                     .collect(Collectors.toList());
             
-            System.out.println("MyClasses - Found " + enrollments.size() + " enrollments for user " + user.getId());
             
             List<ClassResponse> classes = enrollments.stream()
                     .map(enrollment -> convertClassToResponse(enrollment.getClassEntity(), user))
                     .collect(Collectors.toList());
 
-            System.out.println("MyClasses - Returning " + classes.size() + " classes");
             return ResponseEntity.ok(classes);
         } catch (Exception e) {
-            System.err.println("Error in getMyClasses: " + e.getMessage());
-            e.printStackTrace();
             return ResponseEntity.status(500).body("Error fetching classes: " + e.getMessage());
         }
     }

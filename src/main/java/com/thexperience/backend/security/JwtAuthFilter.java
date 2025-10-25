@@ -29,25 +29,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String token = resolveToken(request);
-        System.out.println("JWT Filter: Request URI: " + request.getRequestURI());
-        System.out.println("JWT Filter: Token found: " + (token != null));
         if (token != null) {
-            System.out.println("JWT Filter: Token: " + token.substring(0, Math.min(50, token.length())) + "...");
             try {
                 Claims claims = jwtService.parse(token);
                 String userId = claims.getSubject();
                 String role = String.valueOf(claims.get("role"));
-                System.out.println("JWT Filter: Parsed userId: " + userId + ", role: " + role);
                 var auth = new UsernamePasswordAuthenticationToken(userId, null,
                         List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                 SecurityContextHolder.getContext().setAuthentication(auth);
-                System.out.println("JWT Filter: Authentication set successfully");
             } catch (Exception e) {
-                System.out.println("JWT Filter: Error parsing token: " + e.getMessage());
-                e.printStackTrace();
+                // Token parsing failed, continue without authentication
             }
-        } else {
-            System.out.println("JWT Filter: No token found in request");
         }
         filterChain.doFilter(request, response);
     }

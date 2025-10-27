@@ -73,6 +73,7 @@ public class CoursesController {
             moduleDto.put("id", module.getId());
             moduleDto.put("title", module.getTitle());
             moduleDto.put("description", module.getDescription());
+            moduleDto.put("thumbnailUrl", module.getThumbnailUrl());
             moduleDto.put("orderIndex", module.getOrderIndex());
             moduleDto.put("isActive", module.getIsActive());
             

@@ -29,6 +29,9 @@ public class TrainingModuleEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "thumbnail_url")
+    private String thumbnailUrl;
+
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex = 0; // Sequential order: 1, 2, 3...
 
@@ -66,6 +69,9 @@ public class TrainingModuleEntity {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public String getThumbnailUrl() { return thumbnailUrl; }
+    public void setThumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; }
 
     public Integer getOrderIndex() { return orderIndex; }
     public void setOrderIndex(Integer orderIndex) { this.orderIndex = orderIndex; }

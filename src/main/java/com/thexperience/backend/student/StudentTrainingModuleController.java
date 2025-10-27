@@ -65,6 +65,7 @@ public class StudentTrainingModuleController {
             response.put("trainingId", module.getTraining().getId());
             response.put("title", module.getTitle());
             response.put("description", module.getDescription());
+            response.put("thumbnailUrl", module.getThumbnailUrl());
             response.put("orderIndex", module.getOrderIndex());
             response.put("isActive", module.getIsActive());
 

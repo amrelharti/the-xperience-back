@@ -363,12 +363,40 @@ public class FeedController {
             
             // ALWAYS AUTOMATICALLY SET CLASS - Critical for class-based feed and leaderboard!
             System.out.println("=== AUTO-ASSIGNING CLASS ===");
-            List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments = 
-                classEnrollmentRepository.findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
             
-            System.out.println("User has " + enrollments.size() + " class enrollments");
+            // Priority 1: Use the provided classId if it exists and user is enrolled in it
+            if (request.getClassId() != null) {
+                System.out.println("User specified classId: " + request.getClassId());
+                List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments = 
+                    classEnrollmentRepository.findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
+                
+                // Check if user is enrolled in the specified class
+                boolean foundClass = false;
+                for (com.thexperience.backend.entities.ClassEnrollmentEntity enrollment : enrollments) {
+                    if (enrollment.getClassEntity().getId().equals(request.getClassId())) {
+                        post.setClassEntity(enrollment.getClassEntity());
+                        System.out.println("✅ Assigned post to specified class: " + enrollment.getClassEntity().getName());
+                        foundClass = true;
+                        break;
+                    }
+                }
+                
+                if (foundClass) {
+                    // Successfully assigned to specified class, skip default logic
+                    enrollments = Collections.emptyList();
+                } else {
+                    System.out.println("⚠️ User not enrolled in specified class " + request.getClassId() + ", falling back to default logic");
+                }
+            }
             
-            if (!enrollments.isEmpty()) {
+            // Priority 2: If no classId specified or user not enrolled in it, use default logic
+            if (post.getClassEntity() == null) {
+                List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments = 
+                    classEnrollmentRepository.findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
+                
+                System.out.println("User has " + enrollments.size() + " class enrollments");
+            
+                if (!enrollments.isEmpty()) {
                 // If moduleId is provided, try to match the class with that module
                 if (request.getModuleId() != null) {
                     boolean classAssigned = false;
@@ -391,8 +419,9 @@ public class FeedController {
                     post.setClassEntity(enrollments.get(0).getClassEntity());
                     System.out.println("✅ Auto-assigned post to first class: " + enrollments.get(0).getClassEntity().getName());
                 }
-            } else {
-                System.out.println("⚠️ User has no class enrollments!");
+                } else {
+                    System.out.println("⚠️ User has no class enrollments!");
+                }
             }
 
             System.out.println("Saving post to database...");

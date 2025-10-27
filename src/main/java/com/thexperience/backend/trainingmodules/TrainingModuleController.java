@@ -45,14 +45,16 @@ public class TrainingModuleController {
         @NotNull UUID trainingId,
         @NotBlank String title,
         String description,
-        @NotNull Integer orderIndex
+        @NotNull Integer orderIndex,
+        String thumbnailUrl
     ) {}
 
     public record UpdateTrainingModuleRequest(
         String title,
         String description,
         Integer orderIndex,
-        Boolean isActive
+        Boolean isActive,
+        String thumbnailUrl
     ) {}
 
     public record TrainingModuleResponse(
@@ -60,6 +62,7 @@ public class TrainingModuleController {
         UUID trainingId,
         String title,
         String description,
+        String thumbnailUrl,
         Integer orderIndex,
         Boolean isActive,
         Integer coursesCount,
@@ -143,6 +146,7 @@ public class TrainingModuleController {
             module.setTraining(training);
             module.setTitle(request.title());
             module.setDescription(request.description());
+            module.setThumbnailUrl(request.thumbnailUrl());
             module.setOrderIndex(request.orderIndex());
             module.setIsActive(true);
             module.setCreatedAt(Instant.now());
@@ -173,6 +177,7 @@ public class TrainingModuleController {
 
             if (request.title() != null) module.setTitle(request.title());
             if (request.description() != null) module.setDescription(request.description());
+            if (request.thumbnailUrl() != null) module.setThumbnailUrl(request.thumbnailUrl());
             if (request.orderIndex() != null) module.setOrderIndex(request.orderIndex());
             if (request.isActive() != null) module.setIsActive(request.isActive());
             module.setUpdatedAt(Instant.now());
@@ -332,6 +337,7 @@ public class TrainingModuleController {
             module.getTraining().getId(),
             module.getTitle(),
             module.getDescription(),
+            module.getThumbnailUrl(),
             module.getOrderIndex(),
             module.getIsActive(),
             module.getCourses() != null ? module.getCourses().size() : 0,

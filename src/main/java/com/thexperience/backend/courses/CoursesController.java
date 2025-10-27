@@ -59,7 +59,10 @@ public class CoursesController {
     }
 
     @GetMapping("/courses/{trainingId}")
-    public Map<String,Object> detail(@PathVariable UUID trainingId, Authentication auth) {
+    public Map<String,Object> detail(
+            @PathVariable UUID trainingId,
+            @RequestParam(required = false) UUID classId, // CRITICAL: Get classId from query params
+            Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
         UserEntity user = users.findById(userId).orElseThrow();
         ModuleEntity training = modules.findById(trainingId).orElseThrow();
@@ -77,10 +80,18 @@ public class CoursesController {
             moduleDto.put("orderIndex", module.getOrderIndex());
             moduleDto.put("isActive", module.getIsActive());
             
-            // Check if user has unlocked this module (consumed an access code)
-            boolean hasAccess = accessCodes.findByModule(training).stream()
-                    .anyMatch(code -> code.getConsumedBy() != null && 
-                                      code.getConsumedBy().getId().equals(userId));
+            // CRITICAL FIX: Check if user has unlocked THIS SPECIFIC module in THIS SPECIFIC class
+            boolean hasAccess = false;
+            if (classId != null) {
+                // Check if user has consumed a code for this module in this class
+                hasAccess = accessCodes.existsByTrainingModuleAndConsumedByAndConsumedByClassIdAndConsumedAtIsNotNull(
+                    module, user, classId);
+            } else {
+                // Fallback: if no classId provided, check if user has consumed any code for this module
+                hasAccess = accessCodes.findByTrainingModule(module).stream()
+                        .anyMatch(code -> code.getConsumedBy() != null && 
+                                          code.getConsumedBy().getId().equals(userId));
+            }
             moduleDto.put("hasAccess", hasAccess);
             moduleDto.put("status", hasAccess ? "UNLOCKED" : "LOCKED");
             

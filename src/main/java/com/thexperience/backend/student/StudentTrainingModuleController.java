@@ -115,20 +115,31 @@ public class StudentTrainingModuleController {
             UserEntity user = users.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // Get the parent training
+            // Get the parent training for progress tracking
             ModuleEntity training = module.getTraining();
 
-            // Verify code
+            // CRITICAL FIX: Verify code belongs to THIS SPECIFIC training module, not the parent training
             String codeHash = codeUtils.sha256(code);
             ModuleAccessCodeEntity accessCode = accessCodes
-                    .findFirstByModuleAndCodeHashAndConsumedAtIsNull(training, codeHash)
+                    .findFirstByTrainingModuleAndCodeHashAndConsumedAtIsNull(module, codeHash)
                     .orElse(null);
 
             if (accessCode == null) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Invalid or already used access code"));
+                        .body(Map.of("error", "Invalid or already used access code for this module"));
             }
 
+            // CRITICAL FIX: Get and store the classId when consuming the code (for class-specific access)
+            String classIdStr = body.getOrDefault("classId", "");
+            if (!classIdStr.isBlank()) {
+                try {
+                    UUID classId = UUID.fromString(classIdStr);
+                    accessCode.setConsumedByClassId(classId);
+                } catch (IllegalArgumentException e) {
+                    // Invalid UUID, continue without classId
+                }
+            }
+            
             // Mark code as consumed
             accessCode.setConsumedAt(Instant.now());
             accessCode.setConsumedBy(user);
@@ -173,11 +184,8 @@ public class StudentTrainingModuleController {
             UserEntity user = users.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // Get the parent training
-            ModuleEntity training = module.getTraining();
-
-            // Check if user has consumed any access code for this training
-            boolean hasAccess = accessCodes.findByModule(training).stream()
+            // CRITICAL FIX: Check if user has consumed access code for THIS SPECIFIC training module
+            boolean hasAccess = accessCodes.findByTrainingModule(module).stream()
                     .anyMatch(code -> code.getConsumedBy() != null && 
                                       code.getConsumedBy().getId().equals(userId));
 

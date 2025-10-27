@@ -55,7 +55,8 @@ public class TrainingModuleAccessCodeController {
                 String hash = codeUtils.sha256(plain);
                 
                 ModuleAccessCodeEntity codeEntity = new ModuleAccessCodeEntity();
-                codeEntity.setModule(training); // Link to the parent training
+                codeEntity.setModule(training); // Keep link to parent training for backward compatibility
+                codeEntity.setTrainingModule(trainingModule); // CRITICAL FIX: Link to SPECIFIC training module
                 codeEntity.setCodeHash(hash);
                 codeEntity.setGeneratedBy(admin);
                 codeEntity.setCreatedAt(Instant.now());
@@ -77,10 +78,8 @@ public class TrainingModuleAccessCodeController {
             TrainingModuleEntity trainingModule = trainingModules.findById(trainingModuleId)
                     .orElseThrow(() -> new RuntimeException("Training module not found"));
             
-            // Get the parent training (ModuleEntity)
-            ModuleEntity training = trainingModule.getTraining();
-            
-            List<Map<String, Object>> codesList = codes.findByModule(training).stream()
+            // Get codes for this specific training module
+            List<Map<String, Object>> codesList = codes.findByTrainingModule(trainingModule).stream()
                     .map(c -> {
                         Map<String, Object> m = new LinkedHashMap<>();
                         m.put("id", c.getId());

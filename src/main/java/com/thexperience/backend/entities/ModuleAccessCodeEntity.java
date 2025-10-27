@@ -13,6 +13,11 @@ public class ModuleAccessCodeEntity {
     @ManyToOne(optional = false)
     @JoinColumn(name = "module_id")
     private ModuleEntity module;
+    
+    // CRITICAL FIX: Add link to specific TrainingModule (not just parent training)
+    @ManyToOne
+    @JoinColumn(name = "training_module_id")
+    private TrainingModuleEntity trainingModule;
 
     @Column(name = "code_hash", nullable = false)
     private String codeHash;
@@ -30,6 +35,10 @@ public class ModuleAccessCodeEntity {
     @ManyToOne
     @JoinColumn(name = "consumed_by")
     private UserEntity consumedBy;
+    
+    // Track which class the user was in when they consumed the code
+    @Column(name = "consumed_by_class_id")
+    private UUID consumedByClassId;
 
     @Column(name = "is_single_use", nullable = false)
     private boolean singleUse = true;
@@ -50,4 +59,10 @@ public class ModuleAccessCodeEntity {
     public void setConsumedBy(UserEntity consumedBy) { this.consumedBy = consumedBy; }
     public boolean isSingleUse() { return singleUse; }
     public void setSingleUse(boolean singleUse) { this.singleUse = singleUse; }
+    
+    public TrainingModuleEntity getTrainingModule() { return trainingModule; }
+    public void setTrainingModule(TrainingModuleEntity trainingModule) { this.trainingModule = trainingModule; }
+    
+    public UUID getConsumedByClassId() { return consumedByClassId; }
+    public void setConsumedByClassId(UUID consumedByClassId) { this.consumedByClassId = consumedByClassId; }
 }

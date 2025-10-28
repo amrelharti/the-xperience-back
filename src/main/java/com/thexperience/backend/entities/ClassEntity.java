@@ -3,6 +3,7 @@ package com.thexperience.backend.entities;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -40,6 +41,18 @@ public class ClassEntity {
 
     @Column(name = "max_students")
     private Integer maxStudents; // null = no limit
+
+    @OneToMany(mappedBy = "classEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<CourseProgressEntity> courseProgress;
+    
+    @OneToMany(mappedBy = "classEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<PostEntity> posts;
+    
+    @OneToMany(mappedBy = "classEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<ClassEnrollmentEntity> enrollments;
+    
+    @OneToMany(mappedBy = "classEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<LiveSessionAttendanceEntity> liveSessionAttendance;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
@@ -96,4 +109,12 @@ public class ClassEntity {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public List<CourseProgressEntity> getCourseProgress() { return courseProgress; }
+    public void setCourseProgress(List<CourseProgressEntity> courseProgress) { this.courseProgress = courseProgress; }
+    public List<PostEntity> getPosts() { return posts; }
+    public void setPosts(List<PostEntity> posts) { this.posts = posts; }
+    public List<ClassEnrollmentEntity> getEnrollments() { return enrollments; }
+    public void setEnrollments(List<ClassEnrollmentEntity> enrollments) { this.enrollments = enrollments; }
+    public List<LiveSessionAttendanceEntity> getLiveSessionAttendance() { return liveSessionAttendance; }
+    public void setLiveSessionAttendance(List<LiveSessionAttendanceEntity> liveSessionAttendance) { this.liveSessionAttendance = liveSessionAttendance; }
 }

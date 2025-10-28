@@ -343,20 +343,31 @@ public class AdminController {
     }
     
     @DeleteMapping("/courses/{id}")
-    public ResponseEntity<Void> deleteModule(@PathVariable UUID id) {
+    public ResponseEntity<?> deleteModule(@PathVariable UUID id) {
         try {
             ModuleEntity module = modules.findById(id).orElse(null);
-            if (module != null) {
-                // Delete all courses in this module first
-                List<CourseEntity> moduleCourses = courses.findByModule(module);
-                courses.deleteAll(moduleCourses);
-                // Then delete the module
-                modules.deleteById(id);
-                return ResponseEntity.ok().build();
+            if (module == null) {
+                return ResponseEntity.notFound().build();
             }
-            return ResponseEntity.notFound().build();
+            
+            // With cascade configuration, JPA will automatically handle deletion of:
+            // - Training modules (trainingModules)
+            // - Courses (courses)
+            // - And all their related entities
+            
+            // Delete the module - cascade will handle the rest
+            modules.deleteById(id);
+            return ResponseEntity.ok().build();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Handle foreign key constraints
+            System.err.println("Error deleting training: " + e.getMessage());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "Cannot delete training. It may have associated data that cannot be removed."));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            System.err.println("Unexpected error deleting training: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Failed to delete training"));
         }
     }
     

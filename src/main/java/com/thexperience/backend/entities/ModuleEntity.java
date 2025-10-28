@@ -29,6 +29,12 @@ public class ModuleEntity {
 
     @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<CourseEntity> courses;
+    
+    @OneToMany(mappedBy = "training", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<TrainingModuleEntity> trainingModules;
+    
+    @OneToMany(mappedBy = "module", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<ClassEntity> classes;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
@@ -52,4 +58,8 @@ public class ModuleEntity {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public List<TrainingModuleEntity> getTrainingModules() { return trainingModules; }
+    public void setTrainingModules(List<TrainingModuleEntity> trainingModules) { this.trainingModules = trainingModules; }
+    public List<ClassEntity> getClasses() { return classes; }
+    public void setClasses(List<ClassEntity> classes) { this.classes = classes; }
 }

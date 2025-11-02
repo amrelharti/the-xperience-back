@@ -80,3 +80,5 @@ CREATE INDEX idx_module_access_code_training_module_code_consumed
 5. `courses/CoursesController.java` - Fixed access checking
 6. `resources/db/migration/V3__Add_Training_Module_To_Access_Codes.sql` - Database migration
 
+
+

@@ -5,6 +5,7 @@ import com.thexperience.backend.repos.UserRepository;
 import com.thexperience.backend.security.JwtService;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,7 +39,7 @@ public class AuthController {
     public ResponseEntity<Map<String, Object>> google(@RequestBody GoogleAuthRequest body) {
         System.out.println("Google auth request received");
         System.out.println("Expected client ID: " + googleClientId);
-        
+
         Map<String, Object> tokenInfo = verifyWithGoogle(body.idToken());
         if (tokenInfo == null) {
             System.out.println("Token verification failed");
@@ -46,7 +47,7 @@ public class AuthController {
         }
 
         System.out.println("Token info: " + tokenInfo);
-        
+
         // Validate audience
         String aud = String.valueOf(tokenInfo.get("aud"));
         System.out.println("Token audience: '" + aud + "'");
@@ -55,7 +56,7 @@ public class AuthController {
         System.out.println("Expected audience length: " + googleClientId.length());
         System.out.println("Audience match: " + googleClientId.equals(aud));
         System.out.println("Audience trim match: " + googleClientId.trim().equals(aud.trim()));
-        
+
         // Use trim() to handle any whitespace issues
         if (!googleClientId.trim().equals(aud.trim())) {
             System.out.println("Audience validation failed");
@@ -63,8 +64,8 @@ public class AuthController {
         }
 
         // Extract fields
-        String email   = String.valueOf(tokenInfo.get("email"));
-        String name    = String.valueOf(tokenInfo.getOrDefault("name", ""));
+        String email = String.valueOf(tokenInfo.get("email"));
+        String name = String.valueOf(tokenInfo.getOrDefault("name", ""));
         String picture = String.valueOf(tokenInfo.getOrDefault("picture", ""));
 
         // Check if user exists in database - only allow existing users to sign in
@@ -73,7 +74,7 @@ public class AuthController {
             System.out.println("User not found in database: " + email);
             return ResponseEntity.status(401).body(Map.of("error", "user_not_found", "message", "Your account is not registered. Please contact an administrator."));
         }
-        
+
         System.out.println("User found in database: " + user.getEmail() + " with role: " + user.getRole());
 
         // Issue JWT and set cookie for 7 days
@@ -82,10 +83,11 @@ public class AuthController {
 
         ResponseCookie cookie = ResponseCookie.from("SESSION", jwt)
                 .httpOnly(true)
-                .secure(false)         // set to true in production behind HTTPS
-                .sameSite("Lax")
+                .secure(true)
+                .sameSite("None")  // crucial for cross-domain cookies
                 .path("/")
-                .maxAge(ttlSeconds)
+                .domain(".the-xperience.com") // ✅ Add dot prefix
+                .maxAge(Duration.ofDays(7))
                 .build();
 
         Map<String, Object> bodyOut = Map.of(
@@ -97,11 +99,11 @@ public class AuthController {
         );
 
         return ResponseEntity.ok()
-                .header("Set-Cookie", cookie.toString())
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(bodyOut);
     }
 
-    @PostMapping("/email")
+        @PostMapping("/email")
     public ResponseEntity<Map<String, Object>> email(@RequestBody EmailAuthRequest body) {
         // For now, we'll use a simple hardcoded admin user
         // In production, you'd hash passwords and store them in the database
@@ -117,16 +119,18 @@ public class AuthController {
             });
 
             // Issue JWT and set cookie for 7 days
-            long ttlSeconds = Duration.ofDays(7).toSeconds();
+            long ttlSeconds = Duration.ofDays(1).toSeconds();
             String jwt = jwtService.issueToken(user.getId(), user.getRole(), ttlSeconds);
 
             ResponseCookie cookie = ResponseCookie.from("SESSION", jwt)
                     .httpOnly(true)
-                    .secure(false)         // set to true in production behind HTTPS
-                    .sameSite("Lax")
+                    .secure(true)
+                    .sameSite("None")
+                    .domain(".the-xperience.com") // ✅ Add dot prefix
                     .path("/")
                     .maxAge(ttlSeconds)
                     .build();
+
 
             Map<String, Object> bodyOut = Map.of(
                     "id", user.getId(),
@@ -177,17 +181,20 @@ public class AuthController {
             return ResponseEntity.status(401).body(Map.of("error", "invalid_credentials"));
         }
     }
-
     @PostMapping("/logout")
     public ResponseEntity<?> logout() {
         ResponseCookie cleared = ResponseCookie.from("SESSION", "")
                 .httpOnly(true)
-                .secure(false)          // match whatever you use for login
-                .sameSite("Lax")
+                .secure(true)
+                .sameSite("None")
+                .domain(".the-xperience.com") // ✅ Already has dot prefix
                 .path("/")
                 .maxAge(0)
                 .build();
-        return ResponseEntity.noContent().header("Set-Cookie", cleared.toString()).build();
+
+        return ResponseEntity.noContent()
+                .header("Set-Cookie", cleared.toString())
+                .build();
     }
 
     // Return a concrete type to avoid wildcard capture issues.

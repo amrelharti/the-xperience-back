@@ -86,3 +86,5 @@ WHERE mac.training_module_id IS NOT NULL;
 3. Try generating a new code
 4. Check backend logs for exceptions
 
+
+

@@ -21,30 +21,24 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
-        this.jwtAuthFilter = jwtAuthFilter; // ✅ use the Spring-managed bean
+        this.jwtAuthFilter = jwtAuthFilter;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                    .authorizeHttpRequests(auth -> auth
-                            .requestMatchers("/api/health", "/api/auth/google", "/api/auth/email", "/api/auth/logout", "/api/test/**", "/api/feed/fix-post-classes", "/api/feed/debug-posts").permitAll()
-                            .requestMatchers("/api/public/**").permitAll()
-                            .requestMatchers("/api/me").authenticated()
-                            .requestMatchers("/api/profile/**").authenticated()
-                            .requestMatchers("/api/classes/my-classes").authenticated()
-                            .requestMatchers("/api/classes/**").permitAll()
-                            .requestMatchers("/api/courses/**").authenticated()
-                            .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                            .anyRequest().authenticated()
-                    )
-                .cors(Customizer.withDefaults());
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/actuator/**", "/api/public/**", "/api/health").permitAll()
+                        .requestMatchers("/api/auth/google", "/api/auth/email", "/api/auth/logout").permitAll() // ADD THIS LINE!
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .anyRequest().authenticated()
+                );
 
-        // ✅ Add the already-injected filter ONCE
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 
@@ -52,9 +46,15 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
-        config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+        config.setAllowedOrigins(List.of(
+                "https://app.the-xperience.com",
+                "https://api.the-xperience.com",
+                "http://localhost:3000"
+        ));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization", "Set-Cookie"));
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

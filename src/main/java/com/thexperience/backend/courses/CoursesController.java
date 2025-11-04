@@ -19,10 +19,12 @@ public class CoursesController {
     private final ModuleProgressRepository progressRepo;
     private final ModuleAccessCodeRepository accessCodes;
     private final UserRepository users;
+    private final CodeUsageLogRepository usageLogRepository;
 
     public CoursesController(CourseRepository courses, ModuleRepository modules, TrainingModuleRepository trainingModules,
                              EnrollmentRepository enrollments, ModuleProgressRepository progressRepo,
-                             ModuleAccessCodeRepository accessCodes, UserRepository users) {
+                             ModuleAccessCodeRepository accessCodes, UserRepository users,
+                             CodeUsageLogRepository usageLogRepository) {
         this.courses = courses;
         this.modules = modules;
         this.trainingModules = trainingModules;
@@ -30,6 +32,7 @@ public class CoursesController {
         this.progressRepo = progressRepo;
         this.accessCodes = accessCodes;
         this.users = users;
+        this.usageLogRepository = usageLogRepository;
     }
 
     @GetMapping("/courses")
@@ -80,18 +83,11 @@ public class CoursesController {
             moduleDto.put("orderIndex", module.getOrderIndex());
             moduleDto.put("isActive", module.getIsActive());
             
-            // CRITICAL FIX: Check if user has unlocked THIS SPECIFIC module in THIS SPECIFIC class
-            boolean hasAccess = false;
-            if (classId != null) {
-                // Check if user has consumed a code for this module in this class
-                hasAccess = accessCodes.existsByTrainingModuleAndConsumedByAndConsumedByClassIdAndConsumedAtIsNotNull(
-                    module, user, classId);
-            } else {
-                // Fallback: if no classId provided, check if user has consumed any code for this module
-                hasAccess = accessCodes.findByTrainingModule(module).stream()
-                        .anyMatch(code -> code.getConsumedBy() != null && 
-                                          code.getConsumedBy().getId().equals(userId));
-            }
+            // CRITICAL FIX: Check if user has unlocked THIS SPECIFIC module using usage log (not consumed field)
+            boolean hasAccess = usageLogRepository.findByResourceIdOrderByUsedAtDesc(module.getId()).stream()
+                    .anyMatch(usage -> usage.getUser().getId().equals(userId) && 
+                                       "TRAINING_MODULE".equals(usage.getCodeType()));
+            
             moduleDto.put("hasAccess", hasAccess);
             moduleDto.put("status", hasAccess ? "UNLOCKED" : "LOCKED");
             

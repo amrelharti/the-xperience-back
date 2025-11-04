@@ -22,6 +22,9 @@ public class ModuleAccessCodeEntity {
     @Column(name = "code_hash", nullable = false)
     private String codeHash;
 
+    @Column(name = "plain_code", length = 20)
+    private String plainCode;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -43,12 +46,17 @@ public class ModuleAccessCodeEntity {
     @Column(name = "is_single_use", nullable = false)
     private boolean singleUse = true;
 
+    @Column(name = "is_active", nullable = false)
+    private boolean isActive = true;
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public ModuleEntity getModule() { return module; }
     public void setModule(ModuleEntity module) { this.module = module; }
     public String getCodeHash() { return codeHash; }
     public void setCodeHash(String codeHash) { this.codeHash = codeHash; }
+    public String getPlainCode() { return plainCode; }
+    public void setPlainCode(String plainCode) { this.plainCode = plainCode; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getConsumedAt() { return consumedAt; }
@@ -65,4 +73,7 @@ public class ModuleAccessCodeEntity {
     
     public UUID getConsumedByClassId() { return consumedByClassId; }
     public void setConsumedByClassId(UUID consumedByClassId) { this.consumedByClassId = consumedByClassId; }
+    
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { isActive = active; }
 }

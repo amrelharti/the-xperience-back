@@ -23,6 +23,7 @@ public class StudentTrainingModuleController {
     private final UserRepository users;
     private final ModuleProgressRepository progress;
     private final com.thexperience.backend.codes.CodeUtils codeUtils;
+    private final CodeUsageLogRepository usageLogRepository;
 
     public StudentTrainingModuleController(
             TrainingModuleRepository trainingModules,
@@ -31,7 +32,8 @@ public class StudentTrainingModuleController {
             ModuleAccessCodeRepository accessCodes,
             UserRepository users,
             ModuleProgressRepository progress,
-            com.thexperience.backend.codes.CodeUtils codeUtils) {
+            com.thexperience.backend.codes.CodeUtils codeUtils,
+            CodeUsageLogRepository usageLogRepository) {
         this.trainingModules = trainingModules;
         this.trainings = trainings;
         this.courses = courses;
@@ -39,6 +41,7 @@ public class StudentTrainingModuleController {
         this.users = users;
         this.progress = progress;
         this.codeUtils = codeUtils;
+        this.usageLogRepository = usageLogRepository;
     }
 
     /**
@@ -121,29 +124,32 @@ public class StudentTrainingModuleController {
             // CRITICAL FIX: Verify code belongs to THIS SPECIFIC training module, not the parent training
             String codeHash = codeUtils.sha256(code);
             ModuleAccessCodeEntity accessCode = accessCodes
-                    .findFirstByTrainingModuleAndCodeHashAndConsumedAtIsNull(module, codeHash)
+                    .findFirstByTrainingModuleAndCodeHashAndIsActiveTrue(module, codeHash)
                     .orElse(null);
 
             if (accessCode == null) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Invalid or already used access code for this module"));
+                        .body(Map.of("error", "Invalid or inactive access code for this module"));
             }
 
             // CRITICAL FIX: Get and store the classId when consuming the code (for class-specific access)
             String classIdStr = body.getOrDefault("classId", "");
+            UUID classId = null;
             if (!classIdStr.isBlank()) {
                 try {
-                    UUID classId = UUID.fromString(classIdStr);
-                    accessCode.setConsumedByClassId(classId);
+                    classId = UUID.fromString(classIdStr);
                 } catch (IllegalArgumentException e) {
                     // Invalid UUID, continue without classId
                 }
             }
             
-            // Mark code as consumed
-            accessCode.setConsumedAt(Instant.now());
-            accessCode.setConsumedBy(user);
-            accessCodes.save(accessCode);
+            // Log code usage (don't mark as consumed - allow reuse!)
+            CodeUsageLogEntity usageLog = new CodeUsageLogEntity();
+            usageLog.setCodeId(accessCode.getId());
+            usageLog.setUser(user);
+            usageLog.setCodeType("TRAINING_MODULE");
+            usageLog.setResourceId(moduleId);
+            usageLogRepository.save(usageLog);
 
             // Create or update module progress
             ModuleProgressEntity moduleProgress = progress
@@ -184,10 +190,10 @@ public class StudentTrainingModuleController {
             UserEntity user = users.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // CRITICAL FIX: Check if user has consumed access code for THIS SPECIFIC training module
-            boolean hasAccess = accessCodes.findByTrainingModule(module).stream()
-                    .anyMatch(code -> code.getConsumedBy() != null && 
-                                      code.getConsumedBy().getId().equals(userId));
+            // CRITICAL FIX: Check if user has used any code for THIS SPECIFIC training module (via usage log)
+            boolean hasAccess = usageLogRepository.findByResourceIdOrderByUsedAtDesc(moduleId).stream()
+                    .anyMatch(usage -> usage.getUser().getId().equals(userId) && 
+                                       "TRAINING_MODULE".equals(usage.getCodeType()));
 
             return ResponseEntity.ok(Map.of("hasAccess", hasAccess));
         } catch (Exception e) {

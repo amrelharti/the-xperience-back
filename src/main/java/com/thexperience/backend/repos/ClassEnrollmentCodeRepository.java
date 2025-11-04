@@ -12,6 +12,11 @@ import java.util.Optional;
 public interface ClassEnrollmentCodeRepository extends JpaRepository<ClassEnrollmentCodeEntity, java.util.UUID> {
     List<ClassEnrollmentCodeEntity> findByClassEntity(ClassEntity classEntity);
     Optional<ClassEnrollmentCodeEntity> findFirstByClassEntityAndCodeHashAndConsumedAtIsNull(ClassEntity classEntity, String codeHash);
+    
+    // New methods for active code system
+    Optional<ClassEnrollmentCodeEntity> findFirstByClassEntityAndIsActiveTrue(ClassEntity classEntity);
+    Optional<ClassEnrollmentCodeEntity> findFirstByClassEntityAndCodeHashAndIsActiveTrue(ClassEntity classEntity, String codeHash);
+    List<ClassEnrollmentCodeEntity> findByClassEntityAndIsActiveTrue(ClassEntity classEntity);
 }
 
 

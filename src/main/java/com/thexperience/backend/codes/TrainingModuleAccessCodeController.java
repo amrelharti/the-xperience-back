@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -19,26 +20,26 @@ public class TrainingModuleAccessCodeController {
     private final ModuleAccessCodeRepository codes;
     private final UserRepository users;
     private final CodeUtils codeUtils;
+    private final CodeUsageLogRepository usageLogRepository;
 
     public TrainingModuleAccessCodeController(
             TrainingModuleRepository trainingModules,
             ModuleAccessCodeRepository codes,
             UserRepository users,
-            CodeUtils codeUtils) {
+            CodeUtils codeUtils,
+            CodeUsageLogRepository usageLogRepository) {
         this.trainingModules = trainingModules;
         this.codes = codes;
         this.users = users;
         this.codeUtils = codeUtils;
+        this.usageLogRepository = usageLogRepository;
     }
 
     @PostMapping("/{trainingModuleId}/codes")
-    public ResponseEntity<?> generateCodes(
+    public ResponseEntity<?> generateCode(
             @PathVariable UUID trainingModuleId,
-            @RequestBody Map<String, Integer> body,
             Authentication auth) {
         try {
-            int count = Math.max(1, Math.min(50, body.getOrDefault("count", 1)));
-            
             TrainingModuleEntity trainingModule = trainingModules.findById(trainingModuleId)
                     .orElseThrow(() -> new RuntimeException("Training module not found"));
             
@@ -48,24 +49,29 @@ public class TrainingModuleAccessCodeController {
             UserEntity admin = users.findById(UUID.fromString(String.valueOf(auth.getName())))
                     .orElseThrow(() -> new RuntimeException("User not found"));
             
-            java.util.ArrayList<String> plainCodes = new java.util.ArrayList<>();
-            
-            for (int i = 0; i < count; i++) {
-                String plain = codeUtils.generatePlainCode();
-                String hash = codeUtils.sha256(plain);
-                
-                ModuleAccessCodeEntity codeEntity = new ModuleAccessCodeEntity();
-                codeEntity.setModule(training); // Keep link to parent training for backward compatibility
-                codeEntity.setTrainingModule(trainingModule); // CRITICAL FIX: Link to SPECIFIC training module
-                codeEntity.setCodeHash(hash);
-                codeEntity.setGeneratedBy(admin);
-                codeEntity.setCreatedAt(Instant.now());
-                
-                codes.save(codeEntity);
-                plainCodes.add(plain);
+            // Deactivate all existing codes for this training module
+            List<ModuleAccessCodeEntity> existingCodes = codes.findByTrainingModule(trainingModule);
+            for (ModuleAccessCodeEntity code : existingCodes) {
+                code.setActive(false);
+                codes.save(code);
             }
             
-            return ResponseEntity.ok(Map.of("codes", plainCodes));
+            // Generate ONE new active code
+            String plain = codeUtils.generatePlainCode();
+            String hash = codeUtils.sha256(plain);
+            
+            ModuleAccessCodeEntity codeEntity = new ModuleAccessCodeEntity();
+            codeEntity.setModule(training); // Keep link to parent training for backward compatibility
+            codeEntity.setTrainingModule(trainingModule); // CRITICAL: Link to SPECIFIC training module
+            codeEntity.setCodeHash(hash);
+            codeEntity.setPlainCode(plain); // Store plain code so admin can view it later
+            codeEntity.setGeneratedBy(admin);
+            codeEntity.setCreatedAt(Instant.now());
+            codeEntity.setActive(true);
+            
+            codes.save(codeEntity);
+            
+            return ResponseEntity.ok(Map.of("code", plain, "codeId", codeEntity.getId()));
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -73,31 +79,40 @@ public class TrainingModuleAccessCodeController {
     }
 
     @GetMapping("/{trainingModuleId}/codes")
-    public ResponseEntity<?> listCodes(@PathVariable UUID trainingModuleId) {
+    public ResponseEntity<?> getActiveCode(@PathVariable UUID trainingModuleId) {
         try {
             TrainingModuleEntity trainingModule = trainingModules.findById(trainingModuleId)
                     .orElseThrow(() -> new RuntimeException("Training module not found"));
             
-            // Get codes for this specific training module
-            List<Map<String, Object>> codesList = codes.findByTrainingModule(trainingModule).stream()
-                    .map(c -> {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("id", c.getId());
-                        m.put("isUsed", c.getConsumedAt() != null);
-                        m.put("code", "••••••••"); // Hashed, can't display
-                        m.put("createdAt", c.getCreatedAt());
-                        m.put("consumedAt", c.getConsumedAt());
-                        if (c.getConsumedBy() != null) {
-                            Map<String, Object> user = new LinkedHashMap<>();
-                            user.put("name", c.getConsumedBy().getName());
-                            user.put("email", c.getConsumedBy().getEmail());
-                            m.put("usedBy", user);
-                        }
-                        return m;
-                    })
-                    .toList();
+            // Get the active code for this specific training module
+            Optional<ModuleAccessCodeEntity> activeCodeOpt = codes.findFirstByTrainingModuleAndIsActiveTrue(trainingModule);
             
-            return ResponseEntity.ok(codesList);
+            if (activeCodeOpt.isEmpty()) {
+                return ResponseEntity.ok(Map.of("hasCode", false));
+            }
+            
+            ModuleAccessCodeEntity activeCode = activeCodeOpt.get();
+            
+            // Get usage statistics
+            long usageCount = usageLogRepository.countByCodeId(activeCode.getId());
+            List<CodeUsageLogEntity> recentUsage = usageLogRepository.findByCodeIdOrderByUsedAtDesc(activeCode.getId());
+            
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("hasCode", true);
+            response.put("code", activeCode.getPlainCode()); // Return the plain code for admin to view
+            response.put("codeId", activeCode.getId());
+            response.put("createdAt", activeCode.getCreatedAt());
+            response.put("generatedBy", activeCode.getGeneratedBy().getName());
+            response.put("usageCount", usageCount);
+            response.put("recentUsage", recentUsage.stream().limit(10).map(usage -> {
+                Map<String, Object> usageMap = new LinkedHashMap<>();
+                usageMap.put("userName", usage.getUser().getName());
+                usageMap.put("userEmail", usage.getUser().getEmail());
+                usageMap.put("usedAt", usage.getUsedAt());
+                return usageMap;
+            }).toList());
+            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

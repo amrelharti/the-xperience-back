@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -20,49 +21,78 @@ public class ClassEnrollmentCodeController {
     private final ClassEnrollmentRepository enrollmentRepository;
     private final UserRepository users;
     private final CodeUtils codeUtils;
+    private final CodeUsageLogRepository usageLogRepository;
 
     public ClassEnrollmentCodeController(ClassRepository classRepository, ClassEnrollmentCodeRepository codes,
-                                         ClassEnrollmentRepository enrollmentRepository, UserRepository users, CodeUtils codeUtils) {
+                                         ClassEnrollmentRepository enrollmentRepository, UserRepository users, 
+                                         CodeUtils codeUtils, CodeUsageLogRepository usageLogRepository) {
         this.classRepository = classRepository;
         this.codes = codes;
         this.enrollmentRepository = enrollmentRepository;
         this.users = users;
         this.codeUtils = codeUtils;
+        this.usageLogRepository = usageLogRepository;
     }
 
     @PostMapping("/api/admin/classes/{classId}/codes")
-    public ResponseEntity<?> generate(@PathVariable UUID classId, @RequestBody Map<String, Integer> body, Authentication auth) {
-        int count = Math.max(1, Math.min(50, body.getOrDefault("count", 1)));
+    public ResponseEntity<?> generate(@PathVariable UUID classId, Authentication auth) {
         ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
         UserEntity admin = users.findById(UUID.fromString(String.valueOf(auth.getName()))).orElseThrow();
-        java.util.ArrayList<String> plainCodes = new java.util.ArrayList<>();
         
-        for (int i = 0; i < count; i++) {
-            String plain = codeUtils.generatePlainCode();
-            String hash = codeUtils.sha256(plain);
-            ClassEnrollmentCodeEntity e = new ClassEnrollmentCodeEntity();
-            e.setClassEntity(classEntity);
-            e.setCodeHash(hash);
-            e.setGeneratedBy(admin);
-            codes.save(e);
-            plainCodes.add(plain);
+        // Deactivate all existing codes for this class
+        List<ClassEnrollmentCodeEntity> existingCodes = codes.findByClassEntity(classEntity);
+        for (ClassEnrollmentCodeEntity code : existingCodes) {
+            code.setActive(false);
+            codes.save(code);
         }
-        return ResponseEntity.ok(Map.of("codes", plainCodes));
+        
+        // Generate ONE new active code
+        String plain = codeUtils.generatePlainCode();
+        String hash = codeUtils.sha256(plain);
+        ClassEnrollmentCodeEntity e = new ClassEnrollmentCodeEntity();
+        e.setClassEntity(classEntity);
+        e.setCodeHash(hash);
+        e.setPlainCode(plain); // Store plain code so admin can view it later
+        e.setGeneratedBy(admin);
+        e.setActive(true);
+        codes.save(e);
+        
+        return ResponseEntity.ok(Map.of("code", plain, "codeId", e.getId()));
     }
 
     @GetMapping("/api/admin/classes/{classId}/codes")
-    public List<Map<String, Object>> list(@PathVariable UUID classId) {
+    public ResponseEntity<?> getActiveCode(@PathVariable UUID classId) {
         ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
-        return codes.findByClassEntity(classEntity).stream()
-                .map(c -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("id", c.getId());
-                    m.put("used", c.getConsumedAt() != null);
-                    m.put("createdAt", c.getCreatedAt());
-                    m.put("consumedAt", c.getConsumedAt());
-                    return m;
-                })
-                .toList();
+        
+        // Get the active code
+        Optional<ClassEnrollmentCodeEntity> activeCodeOpt = codes.findFirstByClassEntityAndIsActiveTrue(classEntity);
+        
+        if (activeCodeOpt.isEmpty()) {
+            return ResponseEntity.ok(Map.of("hasCode", false));
+        }
+        
+        ClassEnrollmentCodeEntity activeCode = activeCodeOpt.get();
+        
+        // Get usage statistics
+        long usageCount = usageLogRepository.countByCodeId(activeCode.getId());
+        List<CodeUsageLogEntity> recentUsage = usageLogRepository.findByCodeIdOrderByUsedAtDesc(activeCode.getId());
+        
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("hasCode", true);
+        response.put("code", activeCode.getPlainCode()); // Return the plain code for admin to view
+        response.put("codeId", activeCode.getId());
+        response.put("createdAt", activeCode.getCreatedAt());
+        response.put("generatedBy", activeCode.getGeneratedBy().getName());
+        response.put("usageCount", usageCount);
+        response.put("recentUsage", recentUsage.stream().limit(10).map(usage -> {
+            Map<String, Object> usageMap = new LinkedHashMap<>();
+            usageMap.put("userName", usage.getUser().getName());
+            usageMap.put("userEmail", usage.getUser().getEmail());
+            usageMap.put("usedAt", usage.getUsedAt());
+            return usageMap;
+        }).toList());
+        
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/api/admin/class-codes/{codeId}")
@@ -80,9 +110,11 @@ public class ClassEnrollmentCodeController {
         
         ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
         String hash = codeUtils.sha256(code);
-        ClassEnrollmentCodeEntity c = codes.findFirstByClassEntityAndCodeHashAndConsumedAtIsNull(classEntity, hash).orElse(null);
         
-        if (c == null) return ResponseEntity.status(400).body(Map.of("error","Invalid or used code"));
+        // Check if the code is valid and active
+        ClassEnrollmentCodeEntity c = codes.findFirstByClassEntityAndCodeHashAndIsActiveTrue(classEntity, hash).orElse(null);
+        
+        if (c == null) return ResponseEntity.status(400).body(Map.of("error","Invalid or inactive code"));
         
         UserEntity user = users.findById(UUID.fromString(String.valueOf(auth.getName()))).orElseThrow();
         
@@ -92,10 +124,13 @@ public class ClassEnrollmentCodeController {
             return ResponseEntity.ok(Map.of("enrolled", true, "message", "You are already enrolled in this class"));
         }
         
-        // Mark code as consumed
-        c.setConsumedAt(Instant.now());
-        c.setConsumedBy(user);
-        codes.save(c);
+        // Log code usage (don't mark as consumed - allow reuse!)
+        CodeUsageLogEntity usageLog = new CodeUsageLogEntity();
+        usageLog.setCodeId(c.getId());
+        usageLog.setUser(user);
+        usageLog.setCodeType("CLASS_ENROLLMENT");
+        usageLog.setResourceId(classId);
+        usageLogRepository.save(usageLog);
         
         // Create enrollment
         ClassEnrollmentEntity enrollment = new ClassEnrollmentEntity(user, classEntity);

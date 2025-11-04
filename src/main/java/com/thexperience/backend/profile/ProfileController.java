@@ -39,7 +39,10 @@ public class ProfileController {
                 "name", user.getName(),
                 "email", user.getEmail(),
                 "role", user.getRole(),
-                "imageUrl", user.getImageUrl() != null ? user.getImageUrl() : ""
+                "imageUrl", user.getImageUrl() != null ? user.getImageUrl() : "",
+                "title", user.getTitle() != null ? user.getTitle() : "",
+                "instagram", user.getInstagram() != null ? user.getInstagram() : "",
+                "linkedin", user.getLinkedin() != null ? user.getLinkedin() : ""
             ));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", "Failed to get profile"));
@@ -83,6 +86,21 @@ public class ProfileController {
                 user.setImageUrl(profileData.get("imageUrl"));
             }
             
+            // Update title if provided
+            if (profileData.containsKey("title")) {
+                user.setTitle(profileData.get("title"));
+            }
+            
+            // Update instagram if provided
+            if (profileData.containsKey("instagram")) {
+                user.setInstagram(profileData.get("instagram"));
+            }
+            
+            // Update linkedin if provided
+            if (profileData.containsKey("linkedin")) {
+                user.setLinkedin(profileData.get("linkedin"));
+            }
+            
             user.setUpdatedAt(Instant.now());
             userRepository.save(user);
             
@@ -91,7 +109,10 @@ public class ProfileController {
                 "name", user.getName(),
                 "email", user.getEmail(),
                 "role", user.getRole(),
-                "imageUrl", user.getImageUrl() != null ? user.getImageUrl() : ""
+                "imageUrl", user.getImageUrl() != null ? user.getImageUrl() : "",
+                "title", user.getTitle() != null ? user.getTitle() : "",
+                "instagram", user.getInstagram() != null ? user.getInstagram() : "",
+                "linkedin", user.getLinkedin() != null ? user.getLinkedin() : ""
             ));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", "Failed to update profile"));

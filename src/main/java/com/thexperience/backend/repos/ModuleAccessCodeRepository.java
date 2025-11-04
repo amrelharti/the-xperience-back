@@ -23,4 +23,9 @@ public interface ModuleAccessCodeRepository extends JpaRepository<ModuleAccessCo
         com.thexperience.backend.entities.UserEntity user, 
         UUID classId
     );
+    
+    // New methods for active code system
+    Optional<ModuleAccessCodeEntity> findFirstByTrainingModuleAndIsActiveTrue(TrainingModuleEntity trainingModule);
+    Optional<ModuleAccessCodeEntity> findFirstByTrainingModuleAndCodeHashAndIsActiveTrue(TrainingModuleEntity trainingModule, String codeHash);
+    List<ModuleAccessCodeEntity> findByTrainingModuleAndIsActiveTrue(TrainingModuleEntity trainingModule);
 }

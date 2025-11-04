@@ -610,6 +610,9 @@ public class FeedController {
         author.put("id", post.getAuthor().getId().toString());
         author.put("name", post.getAuthor().getName());
         author.put("imageUrl", post.getAuthor().getImageUrl() != null ? post.getAuthor().getImageUrl() : "");
+        author.put("title", post.getAuthor().getTitle() != null ? post.getAuthor().getTitle() : "");
+        author.put("instagram", post.getAuthor().getInstagram() != null ? post.getAuthor().getInstagram() : "");
+        author.put("linkedin", post.getAuthor().getLinkedin() != null ? post.getAuthor().getLinkedin() : "");
 
         Map<String, Object> response = new HashMap<>();
         response.put("id", post.getId().toString());
@@ -658,6 +661,9 @@ public class FeedController {
         author.put("id", comment.getAuthor().getId().toString());
         author.put("name", comment.getAuthor().getName());
         author.put("imageUrl", comment.getAuthor().getImageUrl() != null ? comment.getAuthor().getImageUrl() : "");
+        author.put("title", comment.getAuthor().getTitle() != null ? comment.getAuthor().getTitle() : "");
+        author.put("instagram", comment.getAuthor().getInstagram() != null ? comment.getAuthor().getInstagram() : "");
+        author.put("linkedin", comment.getAuthor().getLinkedin() != null ? comment.getAuthor().getLinkedin() : "");
 
         Map<String, Object> response = new HashMap<>();
         response.put("id", comment.getId().toString());

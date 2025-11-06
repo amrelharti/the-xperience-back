@@ -38,6 +38,7 @@ public class TrainingModuleAccessCodeController {
     @PostMapping("/{trainingModuleId}/codes")
     public ResponseEntity<?> generateCode(
             @PathVariable UUID trainingModuleId,
+            @RequestBody Map<String, Integer> body,
             Authentication auth) {
         try {
             TrainingModuleEntity trainingModule = trainingModules.findById(trainingModuleId)
@@ -56,7 +57,7 @@ public class TrainingModuleAccessCodeController {
                 codes.save(code);
             }
             
-            // Generate ONE new active code
+            // Generate ONE new active code (multi-use by default)
             String plain = codeUtils.generatePlainCode();
             String hash = codeUtils.sha256(plain);
             
@@ -68,6 +69,7 @@ public class TrainingModuleAccessCodeController {
             codeEntity.setGeneratedBy(admin);
             codeEntity.setCreatedAt(Instant.now());
             codeEntity.setActive(true);
+            codeEntity.setSingleUse(false); // CRITICAL FIX: Set to multi-use!
             
             codes.save(codeEntity);
             

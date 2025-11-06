@@ -35,7 +35,7 @@ public class ClassEnrollmentCodeController {
     }
 
     @PostMapping("/api/admin/classes/{classId}/codes")
-    public ResponseEntity<?> generate(@PathVariable UUID classId, Authentication auth) {
+    public ResponseEntity<?> generate(@PathVariable UUID classId, @RequestBody Map<String, Integer> body, Authentication auth) {
         ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
         UserEntity admin = users.findById(UUID.fromString(String.valueOf(auth.getName()))).orElseThrow();
         
@@ -46,7 +46,7 @@ public class ClassEnrollmentCodeController {
             codes.save(code);
         }
         
-        // Generate ONE new active code
+        // Generate ONE new active code (multi-use by default)
         String plain = codeUtils.generatePlainCode();
         String hash = codeUtils.sha256(plain);
         ClassEnrollmentCodeEntity e = new ClassEnrollmentCodeEntity();
@@ -55,6 +55,7 @@ public class ClassEnrollmentCodeController {
         e.setPlainCode(plain); // Store plain code so admin can view it later
         e.setGeneratedBy(admin);
         e.setActive(true);
+        e.setSingleUse(false); // CRITICAL FIX: Set to multi-use!
         codes.save(e);
         
         return ResponseEntity.ok(Map.of("code", plain, "codeId", e.getId()));

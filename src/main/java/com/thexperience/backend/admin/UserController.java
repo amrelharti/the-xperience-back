@@ -2,6 +2,8 @@ package com.thexperience.backend.admin;
 
 import com.thexperience.backend.entities.UserEntity;
 import com.thexperience.backend.repos.UserRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -48,13 +50,25 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    public Map<String, String> deleteUser(@PathVariable UUID id) {
+    public ResponseEntity<?> deleteUser(@PathVariable UUID id) {
         if (!userRepository.existsById(id)) {
-            throw new RuntimeException("User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", "User not found"));
         }
         
-        userRepository.deleteById(id);
-        return Map.of("message", "User deleted successfully");
+        try {
+            userRepository.deleteById(id);
+            return ResponseEntity.ok(Map.of("message", "User deleted successfully"));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of(
+                    "error", "Cannot delete user",
+                    "message", "This user has associated data (consumed access codes, enrollments, etc.). Please run the latest database migration (V43) to fix foreign key constraints, or contact system administrator."
+                ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Failed to delete user", "details", e.getMessage()));
+        }
     }
 
     @PostMapping

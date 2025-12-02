@@ -90,4 +90,29 @@ public interface PostRepository extends JpaRepository<PostEntity, UUID> {
     
     // Find posts by multiple class IDs, module ID and post type
     Page<PostEntity> findByClassEntityIdInAndModuleIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(List<UUID> classIds, UUID moduleId, PostEntity.PostType postType, Pageable pageable);
+    
+    // Find posts by multiple class IDs and training module ID
+    Page<PostEntity> findByClassEntityIdInAndTrainingModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(List<UUID> classIds, UUID trainingModuleId, Pageable pageable);
+    
+    // Find posts by multiple class IDs, training module ID and post type
+    Page<PostEntity> findByClassEntityIdInAndTrainingModuleIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(List<UUID> classIds, UUID trainingModuleId, PostEntity.PostType postType, Pageable pageable);
+    
+    // NEW: Find rateable posts (ASSIGNMENT or WEEKLY_SUMMARY) by author
+    @Query("SELECT p FROM PostEntity p WHERE p.author = :author AND (p.postType = 'ASSIGNMENT' OR p.postType = 'WEEKLY_SUMMARY')")
+    List<PostEntity> findRateablePostsByAuthor(@Param("author") UserEntity author);
+    
+    // NEW: Find rateable posts (ASSIGNMENT or WEEKLY_SUMMARY) by author and class
+    @Query("SELECT p FROM PostEntity p WHERE p.author = :author AND p.classEntity = :classEntity AND (p.postType = 'ASSIGNMENT' OR p.postType = 'WEEKLY_SUMMARY')")
+    List<PostEntity> findRateablePostsByAuthorAndClass(@Param("author") UserEntity author, @Param("classEntity") ClassEntity classEntity);
+    
+    // NEW: Find rateable posts (ASSIGNMENT or WEEKLY_SUMMARY) by author and module
+    @Query("SELECT p FROM PostEntity p WHERE p.author = :author AND p.module = :module AND (p.postType = 'ASSIGNMENT' OR p.postType = 'WEEKLY_SUMMARY')")
+    List<PostEntity> findRateablePostsByAuthorAndModule(@Param("author") UserEntity author, @Param("module") ModuleEntity module);
+    
+    // Analytics queries
+    long countByAuthorAndPostType(UserEntity author, PostEntity.PostType postType);
+    long countByAuthorAndClassEntity(UserEntity author, ClassEntity classEntity);
+    
+    @Query("SELECT p FROM PostEntity p WHERE p.createdAt >= :date")
+    List<PostEntity> findByCreatedAtAfter(@Param("date") java.time.Instant date);
 }

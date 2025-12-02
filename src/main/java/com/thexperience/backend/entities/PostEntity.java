@@ -26,6 +26,10 @@ public class PostEntity {
     private ModuleEntity module;
 
     @ManyToOne
+    @JoinColumn(name = "training_module_id")
+    private TrainingModuleEntity trainingModule;
+
+    @ManyToOne
     @JoinColumn(name = "class_id")
     private ClassEntity classEntity;
 
@@ -49,7 +53,7 @@ public class PostEntity {
     @JoinColumn(name = "assignment_module_id")
     private ModuleEntity assignmentModule;
 
-    @Column(name = "avg_score", precision = 3, scale = 2)
+    @Column(name = "avg_score", precision = 4, scale = 2)
     private BigDecimal avgScore = BigDecimal.ZERO;
 
     @Column(name = "score_count")
@@ -93,7 +97,7 @@ public class PostEntity {
 
     // Enums
     public enum PostType {
-        POST, ASSIGNMENT, QUESTION, ANNOUNCEMENT
+        POST, ASSIGNMENT, WEEKLY_SUMMARY, FEEDBACK, ANNOUNCEMENT, RESOURCES
     }
 
     // Getters and Setters
@@ -105,6 +109,9 @@ public class PostEntity {
 
     public ModuleEntity getModule() { return module; }
     public void setModule(ModuleEntity module) { this.module = module; }
+
+    public TrainingModuleEntity getTrainingModule() { return trainingModule; }
+    public void setTrainingModule(TrainingModuleEntity trainingModule) { this.trainingModule = trainingModule; }
 
     public ClassEntity getClassEntity() { return classEntity; }
     public void setClassEntity(ClassEntity classEntity) { this.classEntity = classEntity; }

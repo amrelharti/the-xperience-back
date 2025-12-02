@@ -67,3 +67,6 @@ ALTER TABLE class_enrollment_code
     ADD CONSTRAINT class_enrollment_code_generated_by_fkey 
     FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE SET NULL;
 
+
+
+

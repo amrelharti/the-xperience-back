@@ -30,3 +30,6 @@ UPDATE class_enrollment_code SET is_active = FALSE WHERE consumed_at IS NOT NULL
 UPDATE module_access_code SET is_active = TRUE WHERE consumed_at IS NULL;
 UPDATE module_access_code SET is_active = FALSE WHERE consumed_at IS NOT NULL;
 
+
+
+

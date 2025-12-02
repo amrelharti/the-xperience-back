@@ -114,10 +114,19 @@ public class CourseProgressController {
     @PutMapping("/courses/{courseId}/progress")
     public ResponseEntity<?> updateCourseProgress(@PathVariable UUID courseId, @RequestParam UUID classId, @RequestBody ProgressUpdateRequest request, Authentication auth) {
         try {
+            System.out.println("=== UPDATE COURSE PROGRESS ===");
+            System.out.println("Course ID: " + courseId);
+            System.out.println("Class ID: " + classId);
+            System.out.println("Watch Time: " + request.getWatchTimeSeconds() + " seconds");
+            System.out.println("Completion %: " + request.getCompletionPercentage());
+            
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
             CourseEntity course = courseRepository.findById(courseId).orElseThrow();
             ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
+
+            System.out.println("User: " + user.getName() + " (" + user.getEmail() + ")");
+            System.out.println("Course: " + course.getTitle());
 
             // Find or create course progress
             Optional<CourseProgressEntity> existingProgress = courseProgressRepository.findByUserAndCourseAndClassEntity(user, course, classEntity);
@@ -125,24 +134,53 @@ public class CourseProgressController {
             CourseProgressEntity progress;
             if (existingProgress.isPresent()) {
                 progress = existingProgress.get();
+                System.out.println("Found existing progress - Status: " + progress.getStatus());
             } else {
                 progress = new CourseProgressEntity(user, course, classEntity);
+                System.out.println("Creating new progress record");
             }
 
-            // Update progress
+            // Update progress - IMPORTANT: Progress should NEVER go backwards!
+            String oldStatus = progress.getStatus();
             progress.markAsStarted();
-            progress.setWatchTimeSeconds(request.getWatchTimeSeconds());
-            progress.setCompletionPercentage(request.getCompletionPercentage());
+            
+            // Only update watchTimeSeconds if new value is HIGHER
+            Integer existingWatchTime = progress.getWatchTimeSeconds();
+            Integer newWatchTime = request.getWatchTimeSeconds();
+            if (existingWatchTime == null || newWatchTime > existingWatchTime) {
+                progress.setWatchTimeSeconds(newWatchTime);
+                System.out.println("Watch time updated: " + existingWatchTime + " -> " + newWatchTime + " seconds");
+            } else {
+                System.out.println("Watch time NOT updated (new value " + newWatchTime + " <= existing " + existingWatchTime + ")");
+            }
+            
+            // Only update completionPercentage if new value is HIGHER
+            Double existingPercentage = progress.getCompletionPercentage();
+            Double newPercentage = request.getCompletionPercentage();
+            if (existingPercentage == null || newPercentage > existingPercentage) {
+                progress.setCompletionPercentage(newPercentage);
+                System.out.println("Completion % updated: " + existingPercentage + " -> " + newPercentage + "%");
+            } else {
+                System.out.println("Completion % NOT updated (new value " + newPercentage + "% <= existing " + existingPercentage + "%)");
+            }
+
+            System.out.println("Status changed: " + oldStatus + " -> " + progress.getStatus());
 
             // Auto-complete if watched more than 90%
             if (request.getCompletionPercentage() >= 90.0 && !progress.isCompleted()) {
                 progress.markAsCompleted();
+                System.out.println("Auto-completed (watched > 90%)");
             }
 
             progress = courseProgressRepository.save(progress);
+            System.out.println("✅ Progress saved to database");
+            System.out.println("Final status: " + progress.getStatus());
+            System.out.println("Final watch time: " + progress.getWatchTimeSeconds() + " seconds");
 
             // Calculate updated module progress
             int moduleProgress = progressService.calculateModuleProgress(userId, course.getTrainingModule().getId(), classId);
+            System.out.println("Module progress: " + moduleProgress + "%");
+            System.out.println("===============================");
 
             return ResponseEntity.ok(Map.of(
                 "courseId", courseId,
@@ -153,6 +191,8 @@ public class CourseProgressController {
                 "message", "Course progress updated successfully"
             ));
         } catch (Exception e) {
+            System.err.println("❌ Error updating progress: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of("error", "Failed to update course progress: " + e.getMessage()));
         }
     }

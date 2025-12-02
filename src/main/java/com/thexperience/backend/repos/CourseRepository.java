@@ -13,4 +13,5 @@ public interface CourseRepository extends JpaRepository<CourseEntity, UUID> {
     List<CourseEntity> findByModuleOrderByOrderIndexAsc(ModuleEntity module);
     List<CourseEntity> findByTrainingModule(TrainingModuleEntity trainingModule);
     List<CourseEntity> findByTrainingModuleOrderByOrderIndexAsc(TrainingModuleEntity trainingModule);
+    // Note: CourseEntity doesn't have isPublished field, all courses are considered published
 }

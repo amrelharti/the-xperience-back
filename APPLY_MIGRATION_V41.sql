@@ -36,3 +36,6 @@ UPDATE module_access_code SET is_active = FALSE WHERE consumed_at IS NOT NULL;
 -- Verify migration
 SELECT 'Migration V41 completed successfully!' AS status;
 
+
+
+

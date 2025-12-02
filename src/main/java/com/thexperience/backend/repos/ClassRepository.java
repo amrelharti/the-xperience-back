@@ -43,6 +43,9 @@ public interface ClassRepository extends JpaRepository<ClassEntity, UUID> {
     // Find classes for a specific module and date
     @Query("SELECT c FROM ClassEntity c WHERE c.module = :module AND c.startDate <= :date AND (c.endDate IS NULL OR c.endDate >= :date) AND c.isActive = true AND c.isArchived = false")
     List<ClassEntity> findActiveClassesByModuleAndDate(@Param("module") ModuleEntity module, @Param("date") LocalDate date);
+    
+    // Analytics queries
+    long countByIsActiveTrue();
 }
 
 

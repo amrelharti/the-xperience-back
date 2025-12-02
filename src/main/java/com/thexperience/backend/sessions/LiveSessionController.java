@@ -34,7 +34,7 @@ public class LiveSessionController {
     @Autowired
     private ClassRepository classRepository;
 
-    // Create live session (PROFESSOR/ADMIN only)
+    // Create live session (PROFESSOR/ADMIN only) - DEPRECATED: Use /api/admin/modules/{moduleId}/live-session instead
     @PostMapping("/sessions")
     public ResponseEntity<?> createSession(@RequestBody CreateSessionRequest request, Authentication auth) {
         try {
@@ -48,8 +48,27 @@ public class LiveSessionController {
 
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(request.getModuleId()).orElseThrow();
             
+            // classId is required - get from request or find first class for this training
+            UUID classId = request.getClassId();
+            ClassEntity classEntity;
+            if (classId == null) {
+                // Try to find first active class for this training
+                List<ClassEntity> classes = classRepository.findByModuleAndIsActiveTrueAndIsArchivedFalseOrderByStartDateDesc(trainingModule.getTraining());
+                if (classes.isEmpty()) {
+                    throw new IllegalArgumentException("No active class found for this training. classId is required.");
+                }
+                classEntity = classes.get(0);
+            } else {
+                classEntity = classRepository.findById(classId).orElseThrow();
+                // Validate that class belongs to the training
+                if (!classEntity.getModule().getId().equals(trainingModule.getTraining().getId())) {
+                    throw new IllegalArgumentException("Class does not belong to the training of this module.");
+                }
+            }
+            
             LiveSessionEntity session = new LiveSessionEntity(
-                trainingModule, 
+                trainingModule,
+                classEntity,
                 request.getTitle(), 
                 request.getDescription(),
                 request.getStartsAt(), 
@@ -198,10 +217,17 @@ public class LiveSessionController {
         response.put("meetingPassword", session.getMeetingPassword() != null ? session.getMeetingPassword() : "");
         response.put("durationMinutes", session.getDurationMinutes() != null ? session.getDurationMinutes() : 60);
         response.put("instructorName", session.getInstructorName() != null ? session.getInstructorName() : "");
+        response.put("isArchived", session.getIsArchived() != null ? session.getIsArchived() : false);
         response.put("trainingModule", Map.of(
             "id", session.getTrainingModule().getId(),
             "title", session.getTrainingModule().getTitle()
         ));
+        if (session.getClassEntity() != null) {
+            response.put("class", Map.of(
+                "id", session.getClassEntity().getId(),
+                "name", session.getClassEntity().getName()
+            ));
+        }
         return response;
     }
 
@@ -275,6 +301,7 @@ public class LiveSessionController {
     // Request DTOs
     public static class CreateSessionRequest {
         private UUID moduleId;
+        private UUID classId;
         private String title;
         private String description;
         private Instant startsAt;
@@ -288,6 +315,8 @@ public class LiveSessionController {
         // Getters and setters
         public UUID getModuleId() { return moduleId; }
         public void setModuleId(UUID moduleId) { this.moduleId = moduleId; }
+        public UUID getClassId() { return classId; }
+        public void setClassId(UUID classId) { this.classId = classId; }
         public String getTitle() { return title; }
         public void setTitle(String title) { this.title = title; }
         public String getDescription() { return description; }
@@ -308,9 +337,13 @@ public class LiveSessionController {
         public void setInstructorName(String instructorName) { this.instructorName = instructorName; }
     }
 
-    // Admin: Create or update live session for a training module
+    // Admin: Create or update live session for a training module and class
     @PostMapping("/admin/modules/{moduleId}/live-session")
-    public ResponseEntity<?> createOrUpdateLiveSession(@PathVariable UUID moduleId, @RequestBody CreateSessionRequest request, Authentication auth) {
+    public ResponseEntity<?> createOrUpdateLiveSession(
+            @PathVariable UUID moduleId, 
+            @RequestParam(required = false) UUID classId,
+            @RequestBody CreateSessionRequest request, 
+            Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
@@ -321,8 +354,21 @@ public class LiveSessionController {
             
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
             
-            // Check if live session already exists for this training module
-            Optional<LiveSessionEntity> existingSession = liveSessionRepository.findByTrainingModule(trainingModule);
+            // classId can come from query parameter or request body
+            UUID finalClassId = classId != null ? classId : request.getClassId();
+            if (finalClassId == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "classId is required"));
+            }
+            
+            ClassEntity classEntity = classRepository.findById(finalClassId).orElseThrow();
+            
+            // Validate that class belongs to the same training as the module
+            if (!classEntity.getModule().getId().equals(trainingModule.getTraining().getId())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Class does not belong to the training of this module"));
+            }
+            
+            // Check if live session already exists for this training module AND class
+            Optional<LiveSessionEntity> existingSession = liveSessionRepository.findByTrainingModuleAndClassEntity(trainingModule, classEntity);
             
             LiveSessionEntity liveSession;
             if (existingSession.isPresent()) {
@@ -337,11 +383,13 @@ public class LiveSessionController {
                 liveSession.setMeetingPassword(request.getMeetingPassword());
                 liveSession.setDurationMinutes(request.getDurationMinutes());
                 liveSession.setInstructorName(request.getInstructorName());
+                liveSession.setIsArchived(false); // Reset archived status if updating
                 liveSession.setUpdatedAt(Instant.now());
             } else {
                 // Create new session
                 liveSession = new LiveSessionEntity(
                     trainingModule,
+                    classEntity,
                     request.getTitle(),
                     request.getDescription(),
                     request.getStartsAt(),
@@ -361,9 +409,12 @@ public class LiveSessionController {
         }
     }
 
-    // Admin: Get live session for a training module
+    // Admin: Get live session for a training module and class
     @GetMapping("/admin/modules/{moduleId}/live-session")
-    public ResponseEntity<?> getLiveSessionForModule(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> getLiveSessionForModule(
+            @PathVariable UUID moduleId, 
+            @RequestParam(required = false) UUID classId,
+            Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
@@ -373,21 +424,36 @@ public class LiveSessionController {
             }
             
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
-            Optional<LiveSessionEntity> liveSession = liveSessionRepository.findByTrainingModule(trainingModule);
+            
+            if (classId == null) {
+                // If no classId provided, return first active session (backward compatibility)
+                Optional<LiveSessionEntity> liveSession = liveSessionRepository.findByTrainingModuleAndIsArchivedFalse(trainingModule);
+                if (liveSession.isPresent()) {
+                    return ResponseEntity.ok(convertToResponse(liveSession.get()));
+                } else {
+                    return ResponseEntity.ok(Map.of("message", "No live session found for this training module"));
+                }
+            }
+            
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
+            Optional<LiveSessionEntity> liveSession = liveSessionRepository.findByTrainingModuleAndClassEntity(trainingModule, classEntity);
             
             if (liveSession.isPresent()) {
                 return ResponseEntity.ok(convertToResponse(liveSession.get()));
             } else {
-                return ResponseEntity.ok(Map.of("message", "No live session found for this training module"));
+                return ResponseEntity.ok(Map.of("message", "No live session found for this training module and class"));
             }
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Failed to get live session: " + e.getMessage()));
         }
     }
 
-    // Admin: Delete live session for a training module
+    // Admin: Delete live session for a training module and class
     @DeleteMapping("/admin/modules/{moduleId}/live-session")
-    public ResponseEntity<?> deleteLiveSessionForModule(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> deleteLiveSessionForModule(
+            @PathVariable UUID moduleId, 
+            @RequestParam(required = false) UUID classId,
+            Authentication auth) {
         try {
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
@@ -397,24 +463,33 @@ public class LiveSessionController {
             }
             
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
-            Optional<LiveSessionEntity> liveSession = liveSessionRepository.findByTrainingModule(trainingModule);
+            
+            if (classId == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "classId is required"));
+            }
+            
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
+            Optional<LiveSessionEntity> liveSession = liveSessionRepository.findByTrainingModuleAndClassEntity(trainingModule, classEntity);
             
             if (liveSession.isPresent()) {
                 liveSessionRepository.delete(liveSession.get());
                 return ResponseEntity.ok(Map.of("message", "Live session deleted successfully"));
             } else {
-                return ResponseEntity.status(404).body(Map.of("error", "No live session found for this training module"));
+                return ResponseEntity.status(404).body(Map.of("error", "No live session found for this training module and class"));
             }
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", "Failed to delete live session: " + e.getMessage()));
         }
     }
 
-    // Student: Get live session for a training module
+    // Student: Get live session for a training module and class
     @GetMapping("/modules/{moduleId}/live-session")
-    public ResponseEntity<?> getStudentLiveSession(@PathVariable UUID moduleId, Authentication auth) {
+    public ResponseEntity<?> getStudentLiveSession(
+            @PathVariable UUID moduleId, 
+            @RequestParam(required = false) UUID classId,
+            Authentication auth) {
         try {
-            System.out.println("🔍 Student live session request for module: " + moduleId);
+            System.out.println("🔍 Student live session request for module: " + moduleId + ", classId: " + classId);
             
             UUID userId = UUID.fromString(auth.getName());
             UserEntity user = userRepository.findById(userId).orElseThrow();
@@ -423,13 +498,23 @@ public class LiveSessionController {
             TrainingModuleEntity trainingModule = trainingModuleRepository.findById(moduleId).orElseThrow();
             System.out.println("📚 Training module found: " + trainingModule.getTitle());
             
-            Optional<LiveSessionEntity> liveSession = liveSessionRepository.findByTrainingModule(trainingModule);
+            if (classId == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "classId is required"));
+            }
+            
+            ClassEntity classEntity = classRepository.findById(classId).orElseThrow();
+            
+            // Verify student is enrolled in this class
+            // Note: You may want to add enrollment verification here
+            
+            // Get active (non-archived) live session for this module and class
+            Optional<LiveSessionEntity> liveSession = liveSessionRepository.findByTrainingModuleAndClassEntityAndIsArchivedFalse(trainingModule, classEntity);
             
             if (liveSession.isPresent()) {
                 System.out.println("✅ Live session found: " + liveSession.get().getTitle());
                 return ResponseEntity.ok(convertToResponse(liveSession.get()));
             } else {
-                System.out.println("ℹ️ No live session found for this training module");
+                System.out.println("ℹ️ No live session found for this training module and class");
                 return ResponseEntity.ok(Map.of("message", "No live session found for this training module"));
             }
         } catch (Exception e) {

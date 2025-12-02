@@ -20,6 +20,13 @@ public class LiveSessionEntity {
     @JoinColumn(name = "training_module_id")
     private TrainingModuleEntity trainingModule;
 
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "class_id")
+    private ClassEntity classEntity;
+
+    @Column(name = "is_archived", nullable = false)
+    private Boolean isArchived = false;
+
     @Column(nullable = false)
     private String title;
 
@@ -60,20 +67,23 @@ public class LiveSessionEntity {
     // Constructors
     public LiveSessionEntity() {}
 
-    public LiveSessionEntity(TrainingModuleEntity trainingModule, String title, String description, 
+    public LiveSessionEntity(TrainingModuleEntity trainingModule, ClassEntity classEntity, String title, String description, 
                            Instant startsAt, Instant endsAt, String location) {
         this.trainingModule = trainingModule;
+        this.classEntity = classEntity;
         this.title = title;
         this.description = description;
         this.startsAt = startsAt;
         this.endsAt = endsAt;
         this.location = location;
+        this.isArchived = false;
     }
 
-    public LiveSessionEntity(TrainingModuleEntity trainingModule, String title, String description, 
+    public LiveSessionEntity(TrainingModuleEntity trainingModule, ClassEntity classEntity, String title, String description, 
                            Instant startsAt, Instant endsAt, String location,
                            String meetingUrl, String meetingPassword, Integer durationMinutes, String instructorName) {
         this.trainingModule = trainingModule;
+        this.classEntity = classEntity;
         this.title = title;
         this.description = description;
         this.startsAt = startsAt;
@@ -83,6 +93,7 @@ public class LiveSessionEntity {
         this.meetingPassword = meetingPassword;
         this.durationMinutes = durationMinutes;
         this.instructorName = instructorName;
+        this.isArchived = false;
     }
 
     // Getters and Setters
@@ -91,6 +102,12 @@ public class LiveSessionEntity {
 
     public TrainingModuleEntity getTrainingModule() { return trainingModule; }
     public void setTrainingModule(TrainingModuleEntity trainingModule) { this.trainingModule = trainingModule; }
+
+    public ClassEntity getClassEntity() { return classEntity; }
+    public void setClassEntity(ClassEntity classEntity) { this.classEntity = classEntity; }
+
+    public Boolean getIsArchived() { return isArchived; }
+    public void setIsArchived(Boolean isArchived) { this.isArchived = isArchived; }
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }

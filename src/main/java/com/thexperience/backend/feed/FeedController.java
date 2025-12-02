@@ -47,10 +47,16 @@ public class FeedController {
     private ModuleRepository moduleRepository;
     
     @Autowired
+    private com.thexperience.backend.repos.TrainingModuleRepository trainingModuleRepository;
+    
+    @Autowired
     private com.thexperience.backend.repos.ClassEnrollmentRepository classEnrollmentRepository;
     
     @Autowired
     private com.thexperience.backend.repos.ClassRepository classRepository;
+    
+    @Autowired
+    private com.thexperience.backend.notifications.NotificationController notificationController;
 
     // Debug endpoint to check post module associations
     @GetMapping("/debug/posts")
@@ -167,10 +173,18 @@ public class FeedController {
                         System.out.println("Searching posts in selected classes with query: " + search);
                         if (moduleIdUuid != null) {
                             try {
-                                posts = postRepository.findByClassEntityIdInAndModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, pageable);
+                                // Try training module first (new system)
+                                System.out.println("Attempting to filter by training module: " + moduleIdUuid);
+                                posts = postRepository.findByClassEntityIdInAndTrainingModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, pageable);
+                                System.out.println("Found " + posts.getTotalElements() + " posts with training module filter");
                             } catch (Exception e) {
-                                System.out.println("Error filtering by module in search, falling back to class-only filter: " + e.getMessage());
-                                posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                                System.out.println("Training module filter failed, trying old module system: " + e.getMessage());
+                                try {
+                                    posts = postRepository.findByClassEntityIdInAndModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, pageable);
+                                } catch (Exception e2) {
+                                    System.out.println("Old module filter also failed, falling back to class-only filter: " + e2.getMessage());
+                                    posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                                }
                             }
                         } else {
                             posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
@@ -188,10 +202,18 @@ public class FeedController {
                         System.out.println("Filtering by type: " + postType + " in selected classes");
                         if (moduleIdUuid != null) {
                             try {
-                                posts = postRepository.findByClassEntityIdInAndModuleIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, postType, pageable);
+                                // Try training module first (new system)
+                                System.out.println("Attempting to filter by training module and type: " + moduleIdUuid);
+                                posts = postRepository.findByClassEntityIdInAndTrainingModuleIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, postType, pageable);
+                                System.out.println("Found " + posts.getTotalElements() + " posts with training module and type filter");
                             } catch (Exception e) {
-                                System.out.println("Error filtering by module and type, falling back to class and type filter: " + e.getMessage());
-                                posts = postRepository.findByClassEntityIdInAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, postType, pageable);
+                                System.out.println("Training module filter failed, trying old module system: " + e.getMessage());
+                                try {
+                                    posts = postRepository.findByClassEntityIdInAndModuleIdAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, postType, pageable);
+                                } catch (Exception e2) {
+                                    System.out.println("Old module filter also failed, falling back to class and type filter: " + e2.getMessage());
+                                    posts = postRepository.findByClassEntityIdInAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, postType, pageable);
+                                }
                             }
                         } else {
                             posts = postRepository.findByClassEntityIdInAndPostTypeAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, postType, pageable);
@@ -199,14 +221,28 @@ public class FeedController {
                     } else {
                         // Show all posts from selected classes
                         System.out.println("Loading all posts from selected classes");
-                        // For now, let's use class-only filtering since posts might not have proper module association
                         System.out.println("Loading all posts from classes: " + classesToFilter);
-                        posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
-                        System.out.println("Found " + posts.getTotalElements() + " posts for classes");
                         
-                        // TODO: Implement proper module filtering once posts have correct module association
+                        // Filter by module if specified
                         if (moduleIdUuid != null) {
-                            System.out.println("Note: Module filtering (" + moduleIdUuid + ") not yet implemented due to data structure issues");
+                            try {
+                                // Try training module first (new system)
+                                System.out.println("Attempting to filter by training module: " + moduleIdUuid);
+                                posts = postRepository.findByClassEntityIdInAndTrainingModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, pageable);
+                                System.out.println("Found " + posts.getTotalElements() + " posts for classes and training module");
+                            } catch (Exception e) {
+                                System.out.println("Training module filter failed, trying old module system: " + e.getMessage());
+                                try {
+                                    posts = postRepository.findByClassEntityIdInAndModuleIdAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, moduleIdUuid, pageable);
+                                    System.out.println("Found " + posts.getTotalElements() + " posts for classes and old module");
+                                } catch (Exception e2) {
+                                    System.out.println("Old module filter also failed, falling back to class-only filter: " + e2.getMessage());
+                                    posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                                }
+                            }
+                        } else {
+                            posts = postRepository.findByClassEntityIdInAndIsHiddenFalseOrderByIsPinnedDescCreatedAtDesc(classesToFilter, pageable);
+                            System.out.println("Found " + posts.getTotalElements() + " posts for classes");
                         }
                     }
                 }
@@ -328,6 +364,15 @@ public class FeedController {
                 }
             }
             post.setPostType(postType);
+            
+            // Restrict ANNOUNCEMENT and RESOURCES creation to admins only
+            if (postType == PostEntity.PostType.ANNOUNCEMENT || postType == PostEntity.PostType.RESOURCES) {
+                if (!"ADMIN".equalsIgnoreCase(user.getRole())) {
+                    String postTypeName = postType == PostEntity.PostType.ANNOUNCEMENT ? "announcements" : "resources";
+                    return ResponseEntity.status(403).body(Map.of("error", "Only administrators can create " + postTypeName));
+                }
+            }
+            
             post.setTitle(request.getTitle());
             post.setAttachments(request.getAttachments());
             
@@ -361,72 +406,105 @@ public class FeedController {
                 }
             }
             
+            // Set training module if provided
+            if (request.getTrainingModuleId() != null) {
+                System.out.println("Setting training module for post: " + request.getTrainingModuleId());
+                com.thexperience.backend.entities.TrainingModuleEntity trainingModule = 
+                    trainingModuleRepository.findById(request.getTrainingModuleId()).orElseThrow();
+                post.setTrainingModule(trainingModule);
+            }
+            
             // ALWAYS AUTOMATICALLY SET CLASS - Critical for class-based feed and leaderboard!
             System.out.println("=== AUTO-ASSIGNING CLASS ===");
             
-            // Priority 1: Use the provided classId if it exists and user is enrolled in it
+            boolean assignedViaClassId = false;
+
+            // Priority 1: Use the provided classId if it exists
             if (request.getClassId() != null) {
                 System.out.println("User specified classId: " + request.getClassId());
-                List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments = 
-                    classEnrollmentRepository.findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
-                
-                // Check if user is enrolled in the specified class
-                boolean foundClass = false;
-                for (com.thexperience.backend.entities.ClassEnrollmentEntity enrollment : enrollments) {
-                    if (enrollment.getClassEntity().getId().equals(request.getClassId())) {
-                        post.setClassEntity(enrollment.getClassEntity());
-                        System.out.println("✅ Assigned post to specified class: " + enrollment.getClassEntity().getName());
-                        foundClass = true;
-                        break;
+
+                // Admins can post to any class even if not enrolled
+                if ("ADMIN".equalsIgnoreCase(user.getRole())) {
+                    Optional<ClassEntity> classOpt = classRepository.findById(request.getClassId());
+                    if (classOpt.isPresent()) {
+                        post.setClassEntity(classOpt.get());
+                        System.out.println("✅ Admin posted to class: " + classOpt.get().getName());
+                    } else {
+                        System.out.println("⚠️ Class not found for provided classId: " + request.getClassId());
                     }
-                }
-                
-                if (foundClass) {
-                    // Successfully assigned to specified class, skip default logic
-                    enrollments = Collections.emptyList();
+
+                    assignedViaClassId = post.getClassEntity() != null;
                 } else {
-                    System.out.println("⚠️ User not enrolled in specified class " + request.getClassId() + ", falling back to default logic");
-                }
-            }
-            
-            // Priority 2: If no classId specified or user not enrolled in it, use default logic
-            if (post.getClassEntity() == null) {
-                List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments = 
-                    classEnrollmentRepository.findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
-                
-                System.out.println("User has " + enrollments.size() + " class enrollments");
-            
-                if (!enrollments.isEmpty()) {
-                // If moduleId is provided, try to match the class with that module
-                if (request.getModuleId() != null) {
-                    boolean classAssigned = false;
+                    List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments =
+                        classEnrollmentRepository.findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
+
+                    // Check if user is enrolled in the specified class
                     for (com.thexperience.backend.entities.ClassEnrollmentEntity enrollment : enrollments) {
-                        if (enrollment.getClassEntity().getModule() != null && 
-                            enrollment.getClassEntity().getModule().getId().equals(request.getModuleId())) {
+                        if (enrollment.getClassEntity().getId().equals(request.getClassId())) {
                             post.setClassEntity(enrollment.getClassEntity());
-                            System.out.println("✅ Auto-assigned post to class (via module): " + enrollment.getClassEntity().getName());
-                            classAssigned = true;
+                            System.out.println("✅ Assigned post to specified class: " + enrollment.getClassEntity().getName());
+                            assignedViaClassId = true;
                             break;
                         }
                     }
-                    // If no matching class found for module, use first enrollment
-                    if (!classAssigned) {
+
+                    if (!assignedViaClassId) {
+                        System.out.println("⚠️ User not enrolled in specified class " + request.getClassId() + ", falling back to default logic");
+                    }
+                }
+            }
+
+            // Priority 2: If no classId specified or assignment failed, use default logic based on enrollments
+            if (post.getClassEntity() == null) {
+                List<com.thexperience.backend.entities.ClassEnrollmentEntity> enrollments =
+                    classEnrollmentRepository.findByStudentAndIsActiveTrueOrderByEnrolledAtDesc(user);
+
+                System.out.println("User has " + enrollments.size() + " class enrollments");
+
+                if (!enrollments.isEmpty()) {
+                    // If moduleId is provided, try to match the class with that module
+                    if (request.getModuleId() != null) {
+                        boolean classAssigned = false;
+                        for (com.thexperience.backend.entities.ClassEnrollmentEntity enrollment : enrollments) {
+                            if (enrollment.getClassEntity().getModule() != null &&
+                                enrollment.getClassEntity().getModule().getId().equals(request.getModuleId())) {
+                                post.setClassEntity(enrollment.getClassEntity());
+                                System.out.println("✅ Auto-assigned post to class (via module): " + enrollment.getClassEntity().getName());
+                                classAssigned = true;
+                                break;
+                            }
+                        }
+                        // If no matching class found for module, use first enrollment
+                        if (!classAssigned) {
+                            post.setClassEntity(enrollments.get(0).getClassEntity());
+                            System.out.println("✅ Auto-assigned post to first class: " + enrollments.get(0).getClassEntity().getName());
+                        }
+                    } else {
+                        // No moduleId provided - use first enrollment (most common case)
                         post.setClassEntity(enrollments.get(0).getClassEntity());
                         System.out.println("✅ Auto-assigned post to first class: " + enrollments.get(0).getClassEntity().getName());
                     }
-                } else {
-                    // No moduleId provided - use first enrollment (most common case)
-                    post.setClassEntity(enrollments.get(0).getClassEntity());
-                    System.out.println("✅ Auto-assigned post to first class: " + enrollments.get(0).getClassEntity().getName());
-                }
-                } else {
-                    System.out.println("⚠️ User has no class enrollments!");
+                } else if (!assignedViaClassId) {
+                    // User has no enrollments and class assignment failed - reject the request
+                    System.out.println("❌ Cannot create post without class assignment");
+                    return ResponseEntity.badRequest().body(Map.of(
+                        "error", "You must select a class when creating a post"
+                    ));
                 }
             }
 
             System.out.println("Saving post to database...");
             post = postRepository.save(post);
             System.out.println("Post saved successfully with ID: " + post.getId());
+            
+            // Create notifications for users in the same training and class
+            try {
+                notificationController.createNotificationsForPost(post);
+            } catch (Exception e) {
+                System.err.println("Error creating notifications: " + e.getMessage());
+                // Don't fail the post creation if notifications fail
+            }
+            
             return ResponseEntity.ok(convertPostToResponse(post));
         } catch (Exception e) {
             System.out.println("Error creating post: " + e.getMessage());
@@ -527,6 +605,14 @@ public class FeedController {
             comment = commentRepository.save(comment);
             System.out.println("Comment saved with ID: " + comment.getId());
             
+            // Create notification for post author
+            try {
+                notificationController.createNotificationForComment(comment);
+            } catch (Exception e) {
+                System.err.println("Error creating comment notification: " + e.getMessage());
+                // Don't fail the comment creation if notifications fail
+            }
+            
             Map<String, Object> response = convertCommentToResponse(comment);
             System.out.println("Comment response: " + response);
             
@@ -560,6 +646,15 @@ public class FeedController {
             } else {
                 PostLikeEntity like = new PostLikeEntity(post, user);
                 postLikeRepository.save(like);
+                
+                // Create notification for post author (only when liking, not unliking)
+                try {
+                    notificationController.createNotificationForLike(post, user);
+                } catch (Exception e) {
+                    System.err.println("Error creating like notification: " + e.getMessage());
+                    // Don't fail the like if notifications fail
+                }
+                
                 Map<String, Object> response = new HashMap<>();
                 response.put("liked", true);
                 response.put("likeCount", postLikeRepository.countByPost(post));
@@ -708,24 +803,25 @@ public class FeedController {
             UserEntity user = userRepository.findById(userId).orElseThrow();
             PostEntity post = postRepository.findById(postId).orElseThrow();
 
-            // Only allow rating assignment posts
-            if (post.getPostType() != PostEntity.PostType.ASSIGNMENT) {
+            // Only allow rating assignment and weekly summary posts
+            if (post.getPostType() != PostEntity.PostType.ASSIGNMENT && 
+                post.getPostType() != PostEntity.PostType.WEEKLY_SUMMARY) {
                 Map<String, Object> error = new HashMap<>();
-                error.put("error", "Only assignment posts can be rated");
+                error.put("error", "Only assignment and weekly summary posts can be rated");
                 return ResponseEntity.badRequest().body(error);
             }
 
             // Prevent self-rating
             if (post.getAuthor().getId().equals(userId)) {
                 Map<String, Object> error = new HashMap<>();
-                error.put("error", "Cannot rate your own assignment");
+                error.put("error", "Cannot rate your own post");
                 return ResponseEntity.badRequest().body(error);
             }
 
             // Validate score range (0-10)
-            if (score < 0 || score > 10) {
+            if (score == null || score < 0 || score > 10) {
                 Map<String, Object> error = new HashMap<>();
-                error.put("error", "Score must be between 0 and 10");
+                error.put("error", "Score must be between 0 and 10 (inclusive)");
                 return ResponseEntity.badRequest().body(error);
             }
 
@@ -777,6 +873,14 @@ public class FeedController {
             }
 
             postRepository.save(post);
+
+            // Create notification for post author
+            try {
+                notificationController.createNotificationForRating(post, user);
+            } catch (Exception e) {
+                System.err.println("Error creating rating notification: " + e.getMessage());
+                // Don't fail the rating if notifications fail
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Assignment rated successfully");
@@ -989,6 +1093,43 @@ public class FeedController {
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("error", "Failed to delete post: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    // Pin/Unpin post (Admin only)
+    @PostMapping("/posts/{postId}/pin")
+    @Transactional
+    public ResponseEntity<?> togglePinPost(
+            @PathVariable UUID postId,
+            Authentication auth) {
+        try {
+            UUID userId = UUID.fromString(auth.getName());
+            UserEntity user = userRepository.findById(userId).orElseThrow();
+            PostEntity post = postRepository.findById(postId).orElseThrow();
+
+            // Only admins can pin/unpin posts
+            if (!"ADMIN".equalsIgnoreCase(user.getRole())) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Only administrators can pin posts");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+            }
+
+            // Toggle pin status
+            boolean newPinStatus = !Boolean.TRUE.equals(post.getIsPinned());
+            post.setIsPinned(newPinStatus);
+            post.setUpdatedAt(Instant.now());
+            post = postRepository.save(post);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", newPinStatus ? "Post pinned successfully" : "Post unpinned successfully");
+            response.put("isPinned", newPinStatus);
+            response.put("post", convertPostToResponse(post));
+            System.out.println("Post " + postId + " pin status changed to: " + newPinStatus);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Failed to toggle pin status: " + e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
     }

@@ -65,3 +65,6 @@ echo "1. Test the profile update at: https://app.the-xperience.com/profile"
 echo "2. Monitor logs: ssh $PROD_SERVER 'sudo journalctl -u $SERVICE_NAME -f'"
 echo "3. If issues occur, rollback with: ssh $PROD_SERVER 'cd $PROD_PATH && sudo systemctl stop $SERVICE_NAME && cp ${JAR_NAME}.backup-* $JAR_NAME && sudo systemctl start $SERVICE_NAME'"
 
+
+
+

@@ -194,19 +194,19 @@ public class LeaderboardController {
                     getAssignmentCountForUserInModule(user, module) :
                     getAssignmentCountForUser(user);
                 
-                // Debug: show total assignments vs rated assignments
-                List<PostEntity> allAssignments = module != null ? 
-                    postRepository.findByAuthorAndModuleAndIsAssignmentTrue(user, module) :
-                    postRepository.findByAuthorAndIsAssignmentTrue(user);
-                long ratedAssignments = allAssignments.stream()
+                // Debug: show total rateable posts vs rated posts
+                List<PostEntity> allRateablePosts = module != null ? 
+                    postRepository.findRateablePostsByAuthorAndModule(user, module) :
+                    postRepository.findRateablePostsByAuthor(user);
+                long ratedPosts = allRateablePosts.stream()
                     .filter(post -> post.getAvgScore() != null && post.getScoreCount() != null && post.getScoreCount() > 0)
                     .count();
                 
                 System.out.println("User: " + user.getName() + 
                     ", Points: " + totalPoints + 
-                    ", Rated Assignments: " + assignmentCount + 
-                    ", Total Assignments: " + allAssignments.size() +
-                    ", Unrated: " + (allAssignments.size() - ratedAssignments));
+                    ", Rated Posts (ASSIGNMENT + WEEKLY_SUMMARY): " + assignmentCount + 
+                    ", Total Rateable Posts: " + allRateablePosts.size() +
+                    ", Unrated: " + (allRateablePosts.size() - ratedPosts));
                 
                 Map<String, Object> userMap = new HashMap<>();
                 userMap.put("id", user.getId().toString());
@@ -252,11 +252,11 @@ public class LeaderboardController {
             .map(enrollment -> enrollment.getStudent())
             .filter(user -> "STUDENT".equals(user.getRole()))
             .map(user -> {
-                // Calculate points from posts in THIS class only
+                // Calculate points from rateable posts (ASSIGNMENT + WEEKLY_SUMMARY) in THIS class only
                 List<PostEntity> classPosts;
-                // For now, use class-only filtering since posts might not have proper module association
-                classPosts = postRepository.findByAuthorAndClassEntityAndIsAssignmentTrue(user, classEntity);
-                System.out.println("User " + user.getName() + " has " + classPosts.size() + " posts in class " + classEntity.getName());
+                // Use class-based filtering for rateable posts
+                classPosts = postRepository.findRateablePostsByAuthorAndClass(user, classEntity);
+                System.out.println("User " + user.getName() + " has " + classPosts.size() + " rateable posts in class " + classEntity.getName());
                 
                 if (trainingId != null) {
                     System.out.println("Note: Training filtering (" + trainingId + ") not yet implemented due to data structure issues");
@@ -305,7 +305,7 @@ public class LeaderboardController {
         return leaderboard;
     }
 
-    // Calculate total points for a user based on assignment ratings they received
+    // Calculate total points for a user based on assignment and weekly summary ratings they received
     private double calculateUserTotalPoints(UserEntity user) {
         // First, let's check ALL posts by this user
         List<PostEntity> allPosts = postRepository.findByAuthor(user);
@@ -318,17 +318,17 @@ public class LeaderboardController {
                 ", Title: " + post.getTitle() + 
                 ", AvgScore: " + post.getAvgScore() + 
                 ", ScoreCount: " + post.getScoreCount() +
-                ", IsAssignment: " + post.getIsAssignment());
+                ", PostType: " + post.getPostType());
         }
         
-        // Now check assignments specifically
-        List<PostEntity> assignments = postRepository.findByAuthorAndIsAssignmentTrue(user);
-        System.out.println("Total assignments found: " + assignments.size());
+        // Now check rateable posts (ASSIGNMENT or WEEKLY_SUMMARY)
+        List<PostEntity> rateablePosts = postRepository.findRateablePostsByAuthor(user);
+        System.out.println("Total rateable posts (ASSIGNMENT + WEEKLY_SUMMARY) found: " + rateablePosts.size());
         
-        double totalPoints = assignments.stream()
+        double totalPoints = rateablePosts.stream()
             .filter(post -> post.getAvgScore() != null && post.getScoreCount() != null && post.getScoreCount() > 0)
             .mapToDouble(post -> {
-                System.out.println("Including post " + post.getId() + " with score: " + post.getAvgScore());
+                System.out.println("Including post " + post.getId() + " (" + post.getPostType() + ") with score: " + post.getAvgScore());
                 return post.getAvgScore().doubleValue();
             })
             .sum();
@@ -337,31 +337,31 @@ public class LeaderboardController {
         return totalPoints;
     }
 
-    // Calculate total points for a user in a specific module based on assignment ratings
+    // Calculate total points for a user in a specific module based on assignment and weekly summary ratings
     private double calculateUserModulePoints(UserEntity user, ModuleEntity module) {
         if (module == null) return 0.0;
         
-        List<PostEntity> assignments = postRepository.findByAuthorAndModuleAndIsAssignmentTrue(user, module);
-        return assignments.stream()
+        List<PostEntity> rateablePosts = postRepository.findRateablePostsByAuthorAndModule(user, module);
+        return rateablePosts.stream()
             .filter(post -> post.getAvgScore() != null && post.getScoreCount() != null && post.getScoreCount() > 0)
             .mapToDouble(post -> post.getAvgScore().doubleValue())
             .sum();
     }
 
-    // Get assignment count for a user across all modules (only rated assignments)
+    // Get rateable post count for a user across all modules (only rated assignments and weekly summaries)
     private int getAssignmentCountForUser(UserEntity user) {
-        List<PostEntity> assignments = postRepository.findByAuthorAndIsAssignmentTrue(user);
-        return (int) assignments.stream()
+        List<PostEntity> rateablePosts = postRepository.findRateablePostsByAuthor(user);
+        return (int) rateablePosts.stream()
             .filter(post -> post.getAvgScore() != null && post.getScoreCount() != null && post.getScoreCount() > 0)
             .count();
     }
 
-    // Get assignment count for a user in a specific module (only rated assignments)
+    // Get rateable post count for a user in a specific module (only rated assignments and weekly summaries)
     private int getAssignmentCountForUserInModule(UserEntity user, ModuleEntity module) {
         if (module == null) return 0;
         
-        List<PostEntity> assignments = postRepository.findByAuthorAndModuleAndIsAssignmentTrue(user, module);
-        return (int) assignments.stream()
+        List<PostEntity> rateablePosts = postRepository.findRateablePostsByAuthorAndModule(user, module);
+        return (int) rateablePosts.stream()
             .filter(post -> post.getAvgScore() != null && post.getScoreCount() != null && post.getScoreCount() > 0)
             .count();
     }

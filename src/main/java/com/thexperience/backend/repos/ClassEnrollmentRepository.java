@@ -40,4 +40,8 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
     // Check if student is enrolled in any class for a module
     @Query("SELECT ce FROM ClassEnrollmentEntity ce WHERE ce.student = :student AND ce.classEntity.module = :module AND ce.isActive = true")
     List<ClassEnrollmentEntity> findActiveEnrollmentsByStudentAndModule(@Param("student") UserEntity student, @Param("module") ModuleEntity module);
+    
+    // Analytics queries
+    long countByIsActiveTrue();
+    long countByStudentAndIsActiveTrue(UserEntity student);
 }

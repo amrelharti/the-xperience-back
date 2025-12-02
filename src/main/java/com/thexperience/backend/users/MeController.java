@@ -49,18 +49,26 @@ public class MeController {
             @RequestBody Map<String, String> profileData,
             Authentication authentication) {
         try {
+            System.out.println("=== Profile Update Request Received ===");
+            System.out.println("Profile Data: " + profileData);
+            
             if (authentication == null || authentication.getName() == null) {
+                System.out.println("ERROR: Not authenticated");
                 return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
             }
 
             java.util.UUID userId = java.util.UUID.fromString(authentication.getName());
+            System.out.println("User ID from auth: " + userId);
+            
             Optional<UserEntity> userOpt = users.findById(userId);
             
             if (userOpt.isEmpty()) {
+                System.out.println("ERROR: User not found: " + userId);
                 return ResponseEntity.notFound().build();
             }
             
             UserEntity user = userOpt.get();
+            System.out.println("Found user: " + user.getEmail());
             
             // Update name if provided
             if (profileData.containsKey("name") && profileData.get("name") != null && !profileData.get("name").trim().isEmpty()) {
@@ -103,6 +111,9 @@ public class MeController {
             user.setUpdatedAt(Instant.now());
             users.save(user);
             
+            System.out.println("Profile updated successfully for user: " + user.getEmail());
+            System.out.println("New values - Name: " + user.getName() + ", Title: " + user.getTitle());
+            
             return ResponseEntity.ok(Map.of(
                 "id", user.getId(),
                 "name", user.getName(),
@@ -114,6 +125,7 @@ public class MeController {
                 "linkedin", user.getLinkedin() != null ? user.getLinkedin() : ""
             ));
         } catch (Exception e) {
+            System.out.println("ERROR updating profile: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of("error", "Failed to update profile: " + e.getMessage()));
         }

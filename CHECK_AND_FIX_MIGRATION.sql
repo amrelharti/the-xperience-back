@@ -78,3 +78,6 @@ SELECT
     'code_usage_log exists: ' || 
     EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='code_usage_log')::text as check3;
 
+
+
+

@@ -10,3 +10,6 @@ ADD COLUMN IF NOT EXISTS plain_code VARCHAR(20);
 -- Note: Existing codes won't have plain_code (will be NULL)
 -- Only newly generated codes will have this field populated
 
+
+
+

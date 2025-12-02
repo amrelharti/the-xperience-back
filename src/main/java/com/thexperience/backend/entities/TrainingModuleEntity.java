@@ -42,9 +42,6 @@ public class TrainingModuleEntity {
     private List<CourseEntity> courses; // Video lessons in this module
     
     @OneToMany(mappedBy = "trainingModule", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<ModuleAccessCodeEntity> accessCodes;
-    
-    @OneToMany(mappedBy = "trainingModule", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<LiveSessionEntity> liveSessions;
 
     @Column(name = "created_at", nullable = false)
@@ -93,8 +90,6 @@ public class TrainingModuleEntity {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
-    public List<ModuleAccessCodeEntity> getAccessCodes() { return accessCodes; }
-    public void setAccessCodes(List<ModuleAccessCodeEntity> accessCodes) { this.accessCodes = accessCodes; }
     public List<LiveSessionEntity> getLiveSessions() { return liveSessions; }
     public void setLiveSessions(List<LiveSessionEntity> liveSessions) { this.liveSessions = liveSessions; }
 }

@@ -24,5 +24,10 @@ public interface VideoAccessLogRepository extends JpaRepository<VideoAccessLogEn
     
     @Query("SELECT v FROM VideoAccessLogEntity v WHERE v.userId = :userId AND v.accessedAt >= :since ORDER BY v.accessedAt DESC")
     List<VideoAccessLogEntity> findByUserIdAndAccessedAtAfterOrderByAccessedAtDesc(UUID userId, java.time.Instant since);
+    
+    // Analytics queries
+    long countByAccessedAtAfter(java.time.Instant date);
+    long countByUserId(UUID userId);
+    List<VideoAccessLogEntity> findByAccessedAtAfter(java.time.Instant date);
 }
 

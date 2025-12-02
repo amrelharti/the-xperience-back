@@ -17,3 +17,6 @@ public interface CodeUsageLogRepository extends JpaRepository<CodeUsageLogEntity
     boolean existsByCodeIdAndUser(UUID codeId, UserEntity user);
 }
 
+
+
+

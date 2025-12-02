@@ -15,24 +15,25 @@ public class CoursesController {
     private final CourseRepository courses;
     private final ModuleRepository modules;
     private final TrainingModuleRepository trainingModules;
-    private final EnrollmentRepository enrollments;
     private final ModuleProgressRepository progressRepo;
-    private final ModuleAccessCodeRepository accessCodes;
     private final UserRepository users;
-    private final CodeUsageLogRepository usageLogRepository;
+    private final ClassEnrollmentRepository classEnrollments;
+    private final TrainingModuleClassAccessRepository classAccessRepository;
+    private final ClassRepository classRepository;
 
     public CoursesController(CourseRepository courses, ModuleRepository modules, TrainingModuleRepository trainingModules,
-                             EnrollmentRepository enrollments, ModuleProgressRepository progressRepo,
-                             ModuleAccessCodeRepository accessCodes, UserRepository users,
-                             CodeUsageLogRepository usageLogRepository) {
+                             ModuleProgressRepository progressRepo, UserRepository users,
+                             ClassEnrollmentRepository classEnrollments,
+                             TrainingModuleClassAccessRepository classAccessRepository,
+                             ClassRepository classRepository) {
         this.courses = courses;
         this.modules = modules;
         this.trainingModules = trainingModules;
-        this.enrollments = enrollments;
         this.progressRepo = progressRepo;
-        this.accessCodes = accessCodes;
         this.users = users;
-        this.usageLogRepository = usageLogRepository;
+        this.classEnrollments = classEnrollments;
+        this.classAccessRepository = classAccessRepository;
+        this.classRepository = classRepository;
     }
 
     @GetMapping("/courses")
@@ -83,10 +84,33 @@ public class CoursesController {
             moduleDto.put("orderIndex", module.getOrderIndex());
             moduleDto.put("isActive", module.getIsActive());
             
-            // CRITICAL FIX: Check if user has unlocked THIS SPECIFIC module using usage log (not consumed field)
-            boolean hasAccess = usageLogRepository.findByResourceIdOrderByUsedAtDesc(module.getId()).stream()
-                    .anyMatch(usage -> usage.getUser().getId().equals(userId) && 
-                                       "TRAINING_MODULE".equals(usage.getCodeType()));
+            // Determine access using class-level toggles
+            boolean hasAccess;
+            if (classId != null) {
+                // If classId is provided, check access for that specific class only
+                ClassEntity classEntity = classRepository.findById(classId).orElse(null);
+                if (classEntity != null) {
+                    Optional<TrainingModuleClassAccessEntity> accessOpt = classAccessRepository
+                            .findByTrainingModuleAndClassEntity(module, classEntity);
+                    hasAccess = accessOpt.map(TrainingModuleClassAccessEntity::isUnlocked).orElse(false);
+                    System.out.println("🔍 Module " + module.getTitle() + " for class " + classEntity.getName() + 
+                                     " (ID: " + classId + "): hasAccess=" + hasAccess + 
+                                     ", accessOpt present=" + accessOpt.isPresent());
+                } else {
+                    // Class not found, default to locked
+                    System.out.println("⚠️ Class not found: " + classId);
+                    hasAccess = false;
+                }
+            } else {
+                // If no classId provided, check all active enrollments (backward compatibility)
+                List<ClassEnrollmentEntity> activeEnrollments = classEnrollments.findActiveEnrollmentsByStudentAndModule(user, training);
+                hasAccess = activeEnrollments.stream()
+                        .map(ClassEnrollmentEntity::getClassEntity)
+                        .anyMatch(classEntity -> classAccessRepository
+                                .findByTrainingModuleAndClassEntity(module, classEntity)
+                                .map(TrainingModuleClassAccessEntity::isUnlocked)
+                                .orElse(false));
+            }
             
             moduleDto.put("hasAccess", hasAccess);
             moduleDto.put("status", hasAccess ? "UNLOCKED" : "LOCKED");

@@ -13,6 +13,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,7 +44,9 @@ public class AuthController {
         Map<String, Object> tokenInfo = verifyWithGoogle(body.idToken());
         if (tokenInfo == null) {
             System.out.println("Token verification failed");
-            return ResponseEntity.status(401).body(Map.of("error", "invalid_id_token"));
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "invalid_id_token");
+            return ResponseEntity.status(401).body(errorResponse);
         }
 
         System.out.println("Token info: " + tokenInfo);
@@ -60,7 +63,9 @@ public class AuthController {
         // Use trim() to handle any whitespace issues
         if (!googleClientId.trim().equals(aud.trim())) {
             System.out.println("Audience validation failed");
-            return ResponseEntity.status(401).body(Map.of("error", "invalid_audience"));
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "invalid_audience");
+            return ResponseEntity.status(401).body(errorResponse);
         }
 
         // Extract fields
@@ -72,10 +77,20 @@ public class AuthController {
         UserEntity user = users.findByEmail(email).orElse(null);
         if (user == null) {
             System.out.println("User not found in database: " + email);
-            return ResponseEntity.status(401).body(Map.of("error", "user_not_found", "message", "Your account is not registered. Please contact an administrator."));
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "user_not_found");
+            errorResponse.put("message", "Your account is not registered. Please contact an administrator.");
+            return ResponseEntity.status(401).body(errorResponse);
         }
 
         System.out.println("User found in database: " + user.getEmail() + " with role: " + user.getRole());
+        
+        // Debug: Check which fields are null
+        System.out.println("User ID: " + user.getId());
+        System.out.println("User name: " + (user.getName() != null ? user.getName() : "NULL"));
+        System.out.println("User email: " + user.getEmail());
+        System.out.println("User role: " + user.getRole());
+        System.out.println("User imageUrl: " + (user.getImageUrl() != null ? user.getImageUrl() : "NULL"));
 
         // Issue JWT and set cookie for 7 days
         long ttlSeconds = Duration.ofDays(7).toSeconds();
@@ -90,13 +105,12 @@ public class AuthController {
                 .maxAge(Duration.ofDays(7))
                 .build();
 
-        Map<String, Object> bodyOut = Map.of(
-                "id", user.getId(),
-                "name", user.getName(),
-                "email", user.getEmail(),
-                "role", user.getRole(),
-                "imageUrl", user.getImageUrl()
-        );
+        Map<String, Object> bodyOut = new HashMap<>();
+        bodyOut.put("id", user.getId());
+        bodyOut.put("name", user.getName() != null ? user.getName() : "");
+        bodyOut.put("email", user.getEmail());
+        bodyOut.put("role", user.getRole() != null ? user.getRole() : "");
+        bodyOut.put("imageUrl", user.getImageUrl() != null ? user.getImageUrl() : "");
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -132,13 +146,12 @@ public class AuthController {
                     .build();
 
 
-            Map<String, Object> bodyOut = Map.of(
-                    "id", user.getId(),
-                    "name", user.getName(),
-                    "email", user.getEmail(),
-                    "role", user.getRole(),
-                    "imageUrl", user.getImageUrl()
-            );
+            Map<String, Object> bodyOut = new HashMap<>();
+            bodyOut.put("id", user.getId());
+            bodyOut.put("name", user.getName() != null ? user.getName() : "");
+            bodyOut.put("email", user.getEmail());
+            bodyOut.put("role", user.getRole() != null ? user.getRole() : "");
+            bodyOut.put("imageUrl", user.getImageUrl() != null ? user.getImageUrl() : "");
 
             return ResponseEntity.ok()
                     .header("Set-Cookie", cookie.toString())
@@ -166,19 +179,20 @@ public class AuthController {
                     .maxAge(ttlSeconds)
                     .build();
 
-            Map<String, Object> bodyOut = Map.of(
-                    "id", user.getId(),
-                    "name", user.getName(),
-                    "email", user.getEmail(),
-                    "role", user.getRole(),
-                    "imageUrl", user.getImageUrl()
-            );
+            Map<String, Object> bodyOut = new HashMap<>();
+            bodyOut.put("id", user.getId());
+            bodyOut.put("name", user.getName() != null ? user.getName() : "");
+            bodyOut.put("email", user.getEmail());
+            bodyOut.put("role", user.getRole() != null ? user.getRole() : "");
+            bodyOut.put("imageUrl", user.getImageUrl() != null ? user.getImageUrl() : "");
 
             return ResponseEntity.ok()
                     .header("Set-Cookie", cookie.toString())
                     .body(bodyOut);
         } else {
-            return ResponseEntity.status(401).body(Map.of("error", "invalid_credentials"));
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "invalid_credentials");
+            return ResponseEntity.status(401).body(errorResponse);
         }
     }
     @PostMapping("/logout")

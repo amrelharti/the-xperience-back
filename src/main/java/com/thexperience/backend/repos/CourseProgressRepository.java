@@ -43,6 +43,21 @@ public interface CourseProgressRepository extends JpaRepository<CourseProgressEn
     // Get completion statistics for a training module
     @Query("SELECT COUNT(cp) FROM CourseProgressEntity cp WHERE cp.course.trainingModule = :trainingModule AND cp.status = 'COMPLETED'")
     long countCompletedByTrainingModule(@Param("trainingModule") com.thexperience.backend.entities.TrainingModuleEntity trainingModule);
+    
+    // Analytics queries
+    long countByStatus(String status);
+    
+    @Query("SELECT AVG(cp.watchTimeSeconds) FROM CourseProgressEntity cp WHERE cp.watchTimeSeconds IS NOT NULL")
+    Double findAverageWatchTimeSeconds();
+    
+    List<CourseProgressEntity> findByCourse(CourseEntity course);
+    
+    List<CourseProgressEntity> findByUser(UserEntity user);
+    
+    List<CourseProgressEntity> findByUserAndClassEntity(UserEntity user, ClassEntity classEntity);
+    
+    @Query("SELECT cp FROM CourseProgressEntity cp WHERE cp.completedAt >= :date")
+    List<CourseProgressEntity> findByCompletedAtAfter(@Param("date") java.time.Instant date);
 }
 
 

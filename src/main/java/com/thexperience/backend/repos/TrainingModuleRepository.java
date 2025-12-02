@@ -14,5 +14,6 @@ public interface TrainingModuleRepository extends JpaRepository<TrainingModuleEn
     List<TrainingModuleEntity> findByTrainingOrderByOrderIndexAsc(ModuleEntity training);
     Optional<TrainingModuleEntity> findByTrainingAndOrderIndex(ModuleEntity training, Integer orderIndex);
     Long countByTraining(ModuleEntity training);
+    long countByIsActive(boolean isActive);
 }
 

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public class CreatePostRequest {
     private UUID moduleId;
+    private UUID trainingModuleId;
     private UUID classId;
     private String postType;
     private String title;
@@ -24,6 +25,9 @@ public class CreatePostRequest {
     // Getters and setters
     public UUID getModuleId() { return moduleId; }
     public void setModuleId(UUID moduleId) { this.moduleId = moduleId; }
+
+    public UUID getTrainingModuleId() { return trainingModuleId; }
+    public void setTrainingModuleId(UUID trainingModuleId) { this.trainingModuleId = trainingModuleId; }
 
     public UUID getClassId() { return classId; }
     public void setClassId(UUID classId) { this.classId = classId; }
@@ -50,6 +54,7 @@ public class CreatePostRequest {
     public String toString() {
         return "CreatePostRequest{" +
                 "moduleId=" + moduleId +
+                ", trainingModuleId=" + trainingModuleId +
                 ", classId=" + classId +
                 ", postType=" + postType +
                 ", title='" + title + '\'' +

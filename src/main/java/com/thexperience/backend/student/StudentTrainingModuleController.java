@@ -19,29 +19,52 @@ public class StudentTrainingModuleController {
     private final TrainingModuleRepository trainingModules;
     private final ModuleRepository trainings;
     private final CourseRepository courses;
-    private final ModuleAccessCodeRepository accessCodes;
     private final UserRepository users;
-    private final ModuleProgressRepository progress;
-    private final com.thexperience.backend.codes.CodeUtils codeUtils;
-    private final CodeUsageLogRepository usageLogRepository;
+    private final ClassEnrollmentRepository classEnrollments;
+    private final TrainingModuleClassAccessRepository classAccessRepository;
 
     public StudentTrainingModuleController(
             TrainingModuleRepository trainingModules,
             ModuleRepository trainings,
             CourseRepository courses,
-            ModuleAccessCodeRepository accessCodes,
             UserRepository users,
-            ModuleProgressRepository progress,
-            com.thexperience.backend.codes.CodeUtils codeUtils,
-            CodeUsageLogRepository usageLogRepository) {
+            ClassEnrollmentRepository classEnrollments,
+            TrainingModuleClassAccessRepository classAccessRepository) {
         this.trainingModules = trainingModules;
         this.trainings = trainings;
         this.courses = courses;
-        this.accessCodes = accessCodes;
         this.users = users;
-        this.progress = progress;
-        this.codeUtils = codeUtils;
-        this.usageLogRepository = usageLogRepository;
+        this.classEnrollments = classEnrollments;
+        this.classAccessRepository = classAccessRepository;
+    }
+
+    /**
+     * Get all training modules across all trainings
+     */
+    @GetMapping
+    public ResponseEntity<?> getAllTrainingModules() {
+        try {
+            List<TrainingModuleEntity> allModules = trainingModules.findAll();
+            
+            List<Map<String, Object>> modulesData = allModules.stream()
+                    .filter(module -> module.getIsActive() != null && module.getIsActive())
+                    .map(module -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("id", module.getId());
+                        m.put("title", module.getTitle());
+                        m.put("description", module.getDescription() != null ? module.getDescription() : "");
+                        m.put("trainingId", module.getTraining().getId());
+                        m.put("trainingTitle", module.getTraining().getTitle());
+                        return m;
+                    })
+                    .sorted((a, b) -> ((String)a.get("title")).compareTo((String)b.get("title")))
+                    .toList();
+            
+            return ResponseEntity.ok(modulesData);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of("error", "Failed to retrieve training modules"));
+        }
     }
 
     /**
@@ -90,6 +113,15 @@ public class StudentTrainingModuleController {
 
             response.put("courses", coursesData);
 
+            List<ClassEnrollmentEntity> activeEnrollments = classEnrollments.findActiveEnrollmentsByStudentAndModule(user, module.getTraining());
+            boolean hasAccess = activeEnrollments.stream()
+                    .map(ClassEnrollmentEntity::getClassEntity)
+                    .anyMatch(classEntity -> classAccessRepository
+                            .findByTrainingModuleAndClassEntity(module, classEntity)
+                            .map(TrainingModuleClassAccessEntity::isUnlocked)
+                            .orElse(false));
+            response.put("hasAccess", hasAccess);
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             e.printStackTrace();
@@ -99,6 +131,8 @@ public class StudentTrainingModuleController {
 
     /**
      * Unlock a module with access code
+     * NOTE: This endpoint is deprecated. Use /api/admin/training-modules/{id}/codes/verify instead.
+     * Kept for backward compatibility.
      */
     @PostMapping("/{moduleId}/unlock")
     public ResponseEntity<?> unlockModule(
@@ -106,68 +140,10 @@ public class StudentTrainingModuleController {
             @RequestBody Map<String, String> body,
             Authentication auth) {
         try {
-            String code = body.getOrDefault("code", "");
-            if (code.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Access code required"));
-            }
-
-            TrainingModuleEntity module = trainingModules.findById(moduleId)
-                    .orElseThrow(() -> new RuntimeException("Module not found"));
-
-            UUID userId = UUID.fromString(String.valueOf(auth.getName()));
-            UserEntity user = users.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-
-            // Get the parent training for progress tracking
-            ModuleEntity training = module.getTraining();
-
-            // CRITICAL FIX: Verify code belongs to THIS SPECIFIC training module, not the parent training
-            String codeHash = codeUtils.sha256(code);
-            ModuleAccessCodeEntity accessCode = accessCodes
-                    .findFirstByTrainingModuleAndCodeHashAndIsActiveTrue(module, codeHash)
-                    .orElse(null);
-
-            if (accessCode == null) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "Invalid or inactive access code for this module"));
-            }
-
-            // CRITICAL FIX: Get and store the classId when consuming the code (for class-specific access)
-            String classIdStr = body.getOrDefault("classId", "");
-            UUID classId = null;
-            if (!classIdStr.isBlank()) {
-                try {
-                    classId = UUID.fromString(classIdStr);
-                } catch (IllegalArgumentException e) {
-                    // Invalid UUID, continue without classId
-                }
-            }
-            
-            // Log code usage (don't mark as consumed - allow reuse!)
-            CodeUsageLogEntity usageLog = new CodeUsageLogEntity();
-            usageLog.setCodeId(accessCode.getId());
-            usageLog.setUser(user);
-            usageLog.setCodeType("TRAINING_MODULE");
-            usageLog.setResourceId(moduleId);
-            usageLogRepository.save(usageLog);
-
-            // Create or update module progress
-            ModuleProgressEntity moduleProgress = progress
-                    .findByUserAndModule(user, training)
-                    .orElse(new ModuleProgressEntity());
-
-            if (moduleProgress.getUser() == null) {
-                moduleProgress.setUser(user);
-                moduleProgress.setModule(training);
-                moduleProgress.setStartedAt(Instant.now());
-            }
-
-            moduleProgress.setStatus("IN_PROGRESS");
-            progress.save(moduleProgress);
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Module unlocked successfully"
+            // Redirect to new verification endpoint
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "This endpoint is deprecated. Please use the new verification endpoint.",
+                "message", "Contact your instructor for the correct access code system."
             ));
         } catch (Exception e) {
             e.printStackTrace();
@@ -190,10 +166,14 @@ public class StudentTrainingModuleController {
             UserEntity user = users.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            // CRITICAL FIX: Check if user has used any code for THIS SPECIFIC training module (via usage log)
-            boolean hasAccess = usageLogRepository.findByResourceIdOrderByUsedAtDesc(moduleId).stream()
-                    .anyMatch(usage -> usage.getUser().getId().equals(userId) && 
-                                       "TRAINING_MODULE".equals(usage.getCodeType()));
+            // Determine access based on class toggles
+            List<ClassEnrollmentEntity> activeEnrollments = classEnrollments.findActiveEnrollmentsByStudentAndModule(user, module.getTraining());
+            boolean hasAccess = activeEnrollments.stream()
+                    .map(ClassEnrollmentEntity::getClassEntity)
+                    .anyMatch(classEntity -> classAccessRepository
+                            .findByTrainingModuleAndClassEntity(module, classEntity)
+                            .map(TrainingModuleClassAccessEntity::isUnlocked)
+                            .orElse(false));
 
             return ResponseEntity.ok(Map.of("hasAccess", hasAccess));
         } catch (Exception e) {

@@ -68,3 +68,6 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
     AND tc.table_name IN ('module_access_code', 'course_access_codes', 'class_enrollment_code')
 ORDER BY tc.table_name, kcu.column_name;
 
+
+
+

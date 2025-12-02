@@ -102,3 +102,6 @@ cd "D:\Ali projet\the-xperience-back"; ssh root@srv1092189 "cd /srv && cp the-xp
 
 **Note:** PowerShell may have issues with semicolons. If this doesn't work, run the commands one by one from Steps 1-8.
 
+
+
+

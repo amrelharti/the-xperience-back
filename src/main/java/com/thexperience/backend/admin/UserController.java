@@ -75,7 +75,8 @@ public class UserController {
     public UserEntity createUser(@RequestBody CreateUserRequest request) {
         UserEntity user = new UserEntity();
         user.setName(request.name());
-        user.setEmail(request.email());
+        // Normalize email to lowercase to match database constraint
+        user.setEmail(request.email() != null ? request.email().toLowerCase().trim() : null);
         user.setRole(request.role());
         user.setImageUrl(request.imageUrl());
         user.setCreatedAt(java.time.Instant.now());

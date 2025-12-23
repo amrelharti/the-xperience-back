@@ -197,3 +197,6 @@ SELECT column_name FROM information_schema.columns
 WHERE table_name = 'live_sessions' AND column_name IN ('class_id', 'is_archived');
 ```
 
+
+
+

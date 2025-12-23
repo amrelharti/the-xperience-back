@@ -32,7 +32,19 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**", "/api/public/**", "/api/health").permitAll()
-                        .requestMatchers("/api/auth/google", "/api/auth/email", "/api/auth/logout").permitAll() // ADD THIS LINE!
+                        .requestMatchers("/api/auth/google", "/api/auth/email", "/api/auth/logout").permitAll()
+                        .requestMatchers("/api/score-cv/extract-text").authenticated() // PDF extraction requires auth (for chat feature)
+                        .requestMatchers("/api/score-cv").permitAll() // CV scorer is publicly accessible
+                        .requestMatchers(HttpMethod.POST, "/api/cv-scorer/submissions").permitAll() // CV scorer submissions POST is publicly accessible
+                        .requestMatchers(HttpMethod.GET, "/api/cv-scorer/submissions").authenticated() // CV scorer submissions GET requires authentication (for admin)
+                        .requestMatchers(HttpMethod.POST, "/api/landing-page/leads").permitAll() // Landing page leads POST is publicly accessible
+                        .requestMatchers(HttpMethod.GET, "/api/landing-page/leads").hasRole("ADMIN") // Landing page leads GET requires admin role
+                        .requestMatchers(HttpMethod.GET, "/api/landing-page/remaining-spots").permitAll() // Public access to remaining spots (for landing page)
+                        .requestMatchers(HttpMethod.GET, "/api/admin/landing-page/settings/remaining-spots").hasRole("ADMIN") // Admin GET requires admin role
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/landing-page/settings/remaining-spots").hasRole("ADMIN") // Admin only for updating
+                        .requestMatchers(HttpMethod.GET, "/api/roulette/daily-status").permitAll() // Public access to roulette daily status
+                        .requestMatchers(HttpMethod.POST, "/api/roulette/spin").permitAll() // Public access to spin roulette
+                        .requestMatchers(HttpMethod.POST, "/api/roulette/update-winner").permitAll() // Public access to update winner name
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()

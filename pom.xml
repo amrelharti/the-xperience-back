@@ -104,6 +104,12 @@
     <artifactId>bucket4j-spring-boot-starter</artifactId>
     <version>0.10.1</version>
   </dependency>
+  <!-- Apache PDFBox for PDF text extraction -->
+  <dependency>
+    <groupId>org.apache.pdfbox</groupId>
+    <artifactId>pdfbox</artifactId>
+    <version>3.0.1</version>
+  </dependency>
 </dependencies>
 
 	<build>

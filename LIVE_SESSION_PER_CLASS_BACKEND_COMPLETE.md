@@ -230,3 +230,6 @@ UNIQUE (training_module_id, class_id) ✅ NEW
 4. Archive old live sessions when new classes start
 5. Monitor for any issues with the UNIQUE constraint
 
+
+
+

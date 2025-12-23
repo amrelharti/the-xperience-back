@@ -69,14 +69,24 @@ public class AuthController {
         }
 
         // Extract fields
-        String email = String.valueOf(tokenInfo.get("email"));
+        String email = String.valueOf(tokenInfo.get("email")).toLowerCase().trim();
         String name = String.valueOf(tokenInfo.getOrDefault("name", ""));
         String picture = String.valueOf(tokenInfo.getOrDefault("picture", ""));
 
-        // Check if user exists in database - only allow existing users to sign in
-        UserEntity user = users.findByEmail(email).orElse(null);
+        // Normalize Gmail addresses (Gmail treats dots in local part as equivalent)
+        String normalizedEmail = normalizeGmailEmail(email);
+        System.out.println("Original email: " + email);
+        System.out.println("Normalized email: " + normalizedEmail);
+
+        // Check if user exists in database - try normalized email first, then original
+        UserEntity user = users.findByEmail(normalizedEmail).orElse(null);
+        if (user == null && !normalizedEmail.equals(email)) {
+            // Try with original email if normalized is different
+            user = users.findByEmail(email).orElse(null);
+        }
+        
         if (user == null) {
-            System.out.println("User not found in database: " + email);
+            System.out.println("User not found in database. Tried: " + normalizedEmail + " and " + email);
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("error", "user_not_found");
             errorResponse.put("message", "Your account is not registered. Please contact an administrator.");
@@ -121,11 +131,13 @@ public class AuthController {
     public ResponseEntity<Map<String, Object>> email(@RequestBody EmailAuthRequest body) {
         // For now, we'll use a simple hardcoded admin user
         // In production, you'd hash passwords and store them in the database
-        if ("admin@thexperience.com".equals(body.email()) && "admin123".equals(body.password())) {
+        String normalizedEmail = body.email().toLowerCase().trim();
+        
+        if ("admin@thexperience.com".equals(normalizedEmail) && "admin123".equals(body.password())) {
             // Find or create the admin user
-            UserEntity user = users.findByEmail(body.email()).orElseGet(() -> {
+            UserEntity user = users.findByEmail(normalizedEmail).orElseGet(() -> {
                 UserEntity u = new UserEntity();
-                u.setEmail(body.email());
+                u.setEmail(normalizedEmail);
                 u.setName("Admin User");
                 u.setImageUrl("https://ui-avatars.com/api/?name=Admin+User&background=4F46E5&color=FFFFFF&size=150");
                 u.setRole("ADMIN");
@@ -156,11 +168,11 @@ public class AuthController {
             return ResponseEntity.ok()
                     .header("Set-Cookie", cookie.toString())
                     .body(bodyOut);
-        } else if ("test@student.com".equals(body.email()) && "student123".equals(body.password())) {
+        } else if ("test@student.com".equals(normalizedEmail) && "student123".equals(body.password())) {
             // Test student user
-            UserEntity user = users.findByEmail(body.email()).orElseGet(() -> {
+            UserEntity user = users.findByEmail(normalizedEmail).orElseGet(() -> {
                 UserEntity u = new UserEntity();
-                u.setEmail(body.email());
+                u.setEmail(normalizedEmail);
                 u.setName("Test Student");
                 u.setImageUrl("https://ui-avatars.com/api/?name=Test+Student&background=10B981&color=FFFFFF&size=150");
                 u.setRole("STUDENT");
@@ -226,5 +238,29 @@ public class AuthController {
             e.printStackTrace();
             return null;
         }
+    }
+
+    /**
+     * Normalizes Gmail addresses by removing dots from the local part.
+     * Gmail treats dots as equivalent, so youssef.aajiba@gmail.com = youssefaajiba@gmail.com
+     */
+    private String normalizeGmailEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return email;
+        }
+        
+        String[] parts = email.split("@", 2);
+        String localPart = parts[0];
+        String domain = parts[1].toLowerCase();
+        
+        // Only normalize Gmail addresses
+        if ("gmail.com".equals(domain) || "googlemail.com".equals(domain)) {
+            // Remove dots from local part for Gmail
+            String normalizedLocal = localPart.replace(".", "");
+            return normalizedLocal + "@" + domain;
+        }
+        
+        // Return original email for non-Gmail addresses
+        return email;
     }
 }

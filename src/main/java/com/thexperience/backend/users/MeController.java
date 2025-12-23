@@ -77,7 +77,7 @@ public class MeController {
             
             // Update email if provided and not already taken
             if (profileData.containsKey("email") && profileData.get("email") != null && !profileData.get("email").trim().isEmpty()) {
-                String newEmail = profileData.get("email").trim();
+                String newEmail = profileData.get("email").toLowerCase().trim();
                 if (!newEmail.equals(user.getEmail())) {
                     // Check if email is already taken by another user
                     Optional<UserEntity> existingUser = users.findByEmail(newEmail);

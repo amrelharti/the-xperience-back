@@ -26,8 +26,12 @@ public class ProfileController {
     @GetMapping
     public ResponseEntity<?> getProfile(Authentication authentication) {
         try {
-            String userEmail = authentication.getName();
-            Optional<UserEntity> userOpt = userRepository.findByEmail(userEmail);
+            if (authentication == null || authentication.getName() == null) {
+                return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+            }
+
+            java.util.UUID userId = java.util.UUID.fromString(authentication.getName());
+            Optional<UserEntity> userOpt = userRepository.findById(userId);
             
             if (userOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
@@ -54,8 +58,12 @@ public class ProfileController {
             @RequestBody Map<String, String> profileData,
             Authentication authentication) {
         try {
-            String userEmail = authentication.getName();
-            Optional<UserEntity> userOpt = userRepository.findByEmail(userEmail);
+            if (authentication == null || authentication.getName() == null) {
+                return ResponseEntity.status(401).body(Map.of("error", "Not authenticated"));
+            }
+
+            java.util.UUID userId = java.util.UUID.fromString(authentication.getName());
+            Optional<UserEntity> userOpt = userRepository.findById(userId);
             
             if (userOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
@@ -72,9 +80,8 @@ public class ProfileController {
             if (profileData.containsKey("email") && profileData.get("email") != null && !profileData.get("email").trim().isEmpty()) {
                 String newEmail = profileData.get("email").toLowerCase().trim();
                 if (!newEmail.equals(user.getEmail())) {
-                    // Check if email is already taken by another user
                     Optional<UserEntity> existingUser = userRepository.findByEmail(newEmail);
-                    if (existingUser.isPresent()) {
+                    if (existingUser.isPresent() && !existingUser.get().getId().equals(user.getId())) {
                         return ResponseEntity.badRequest().body(Map.of("error", "Email already taken"));
                     }
                     user.setEmail(newEmail);
